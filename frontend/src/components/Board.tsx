@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Group, Rect, Ellipse, Line, Text, Circle, Transformer } from 'react-konva';
+import { Stage, Layer, Group, Rect, Ellipse, Line, Arrow, Text, Circle, Transformer } from 'react-konva';
 import type Konva from 'konva';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
 import { distToShape, erasePartial } from '../erase';
-import type { Shape } from '../types';
+import { shapesInLasso, shapesInRect, unionBounds } from '../selection';
+import type { LineShape, Shape } from '../types';
 
 type Evt = Konva.KonvaEventObject<MouseEvent | TouchEvent>;
 interface Pt {
   x: number;
   y: number;
 }
+
+/** The Selection tool's in-progress drag: a rectangle, or a free-form loop. */
+type Marquee =
+  | { mode: 'rect'; x0: number; y0: number; x1: number; y1: number }
+  | { mode: 'free'; pts: number[] };
 
 /* ---------- small helpers ---------- */
 
@@ -30,7 +36,17 @@ function isMeaningful(s: Shape) {
 
 /* ---------- one shape on the canvas ---------- */
 
-function ShapeNode({ shape, interactive }: { shape: Shape; interactive: boolean }) {
+function ShapeNode({
+  shape,
+  interactive,
+  hidden = false,
+  onEditText,
+}: {
+  shape: Shape;
+  interactive: boolean;
+  hidden?: boolean;
+  onEditText?: (shape: Shape) => void;
+}) {
   const updateShape = useDoc((s) => s.updateShape);
   const setSelected = useUI((s) => s.setSelected);
 
@@ -40,6 +56,7 @@ function ShapeNode({ shape, interactive }: { shape: Shape; interactive: boolean 
 
   const common = {
     id: shape.id,
+    visible: !hidden,
     draggable: interactive,
     onMouseDown: select,
     onTouchStart: select,
@@ -65,7 +82,7 @@ function ShapeNode({ shape, interactive }: { shape: Shape; interactive: boolean 
             const height = Math.max(5, n.height() * n.scaleY());
             n.scaleX(1);
             n.scaleY(1);
-            updateShape(shape.id, { x: n.x(), y: n.y(), width, height });
+            updateShape(shape.id, { x: n.x(), y: n.y(), width, height }, 'transform');
           }}
         />
       );
@@ -95,34 +112,53 @@ function ShapeNode({ shape, interactive }: { shape: Shape; interactive: boolean 
             const height = Math.max(5, n.height() * n.scaleY());
             n.scaleX(1);
             n.scaleY(1);
-            updateShape(shape.id, { x: n.x() - width / 2, y: n.y() - height / 2, width, height });
+            updateShape(shape.id, { x: n.x() - width / 2, y: n.y() - height / 2, width, height }, 'transform');
           }}
         />
       );
 
     case 'line':
-    case 'pen':
-      return (
-        <Line
-          {...common}
-          x={shape.x}
-          y={shape.y}
-          points={shape.points}
-          stroke={shape.stroke}
-          strokeWidth={shape.strokeWidth}
-          hitStrokeWidth={Math.max(shape.strokeWidth, 14)}
-          lineCap="round"
-          lineJoin="round"
-          tension={shape.type === 'pen' ? 0.4 : 0}
-          onDragEnd={(e) => updateShape(shape.id, { x: e.target.x(), y: e.target.y() })}
-        />
-      );
+    case 'pen': {
+      const lineProps = {
+        ...common,
+        x: shape.x,
+        y: shape.y,
+        points: shape.points,
+        stroke: shape.stroke,
+        strokeWidth: shape.strokeWidth,
+        hitStrokeWidth: Math.max(shape.strokeWidth, 14),
+        lineCap: 'round' as const,
+        lineJoin: 'round' as const,
+        tension: shape.type === 'pen' ? 0.4 : 0,
+        onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) =>
+          updateShape(shape.id, { x: e.target.x(), y: e.target.y() }),
+        // Used for pens and multi-point lines; plain 2-point lines get endpoint handles instead.
+        onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
+          const n = e.target;
+          const sx = n.scaleX();
+          const sy = n.scaleY();
+          n.scaleX(1);
+          n.scaleY(1);
+          updateShape(
+            shape.id,
+            {
+              x: n.x(),
+              y: n.y(),
+              points: shape.points.map((v, i) => (i % 2 === 0 ? v * sx : v * sy)),
+            },
+            'transform',
+          );
+        },
+      };
+      if (shape.type === 'line' && shape.arrow) {
+        const head = Math.max(12, shape.strokeWidth * 3.5);
+        return <Arrow {...lineProps} fill={shape.stroke} pointerLength={head} pointerWidth={head} />;
+      }
+      return <Line {...lineProps} />;
+    }
 
     case 'text': {
-      const edit = () => {
-        const next = window.prompt('Edit text', shape.text);
-        if (next !== null && next.trim()) updateShape(shape.id, { text: next });
-      };
+      const edit = () => onEditText?.(shape);
       return (
         <Text
           {...common}
@@ -132,6 +168,22 @@ function ShapeNode({ shape, interactive }: { shape: Shape; interactive: boolean 
           fontSize={shape.fontSize}
           fill={shape.stroke}
           onDragEnd={(e) => updateShape(shape.id, { x: e.target.x(), y: e.target.y() })}
+          onTransformEnd={(e) => {
+            // Corner handles scale the font size.
+            const n = e.target;
+            const f = n.scaleY();
+            n.scaleX(1);
+            n.scaleY(1);
+            updateShape(
+              shape.id,
+              {
+                x: n.x(),
+                y: n.y(),
+                fontSize: Math.max(8, Math.round(shape.fontSize * f)),
+              },
+              'transform',
+            );
+          }}
           onDblClick={edit}
           onDblTap={edit}
         />
@@ -149,17 +201,61 @@ export default function Board() {
   const replaceShapes = useDoc((s) => s.replaceShapes);
   const beginBatch = useDoc((s) => s.beginBatch);
   const endBatch = useDoc((s) => s.endBatch);
-  const { tool, selectedId, style, eraserSize, eraserMode, view, setSelected, setView, zoomAt } = useUI();
+  const updateShape = useDoc((s) => s.updateShape);
+  const updateShapes = useDoc((s) => s.updateShapes);
+  const {
+    tool,
+    selectedIds,
+    marqueeMode,
+    editRequest,
+    style,
+    eraserSize,
+    eraserMode,
+    view,
+    setSelected,
+    setSelection,
+    requestEdit,
+    setTool,
+    setView,
+    zoomAt,
+  } = useUI();
 
   const shapes = useMemo(
     () => Object.values(shapesMap).sort((a, b) => a.z - b.z),
     [shapesMap],
   );
-  const selected = selectedId ? shapesMap[selectedId] : undefined;
-  const resizable = selected?.type === 'rect' || selected?.type === 'ellipse';
+  const selectedList = useMemo(
+    () => selectedIds.map((id) => shapesMap[id]).filter((s): s is Shape => !!s),
+    [selectedIds, shapesMap],
+  );
+  const selectish = tool === 'select' || tool === 'marquee';
+  const multi = selectedList.length > 1;
+  const selected = selectedList.length === 1 ? selectedList[0] : undefined;
+  // Several shapes selected: one draggable box over the whole group moves them together.
+  const groupBounds = multi && selectish ? unionBounds(selectedList) : null;
+  // A plain 2-point line / arrow is edited by dragging its two end handles, not a resize box.
+  const endpointLine: LineShape | undefined =
+    selected?.type === 'line' && selected.points.length === 4 ? selected : undefined;
 
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [draft, setDraft] = useState<Shape | null>(null); // shape being drawn (local only)
+  const [marquee, setMarquee] = useState<Marquee | null>(null); // selection drag (local only)
+  const groupDrag = useRef<{ x: number; y: number; orig: Record<string, Pt> } | null>(null);
+
+  // Inline text editor (a textarea floated over the canvas). Not shared with peers.
+  interface Editor {
+    key: number; // identifies one editing session so a stale blur can't close a newer one
+    id: string | null; // existing text shape being edited, or null for a new one
+    x: number; // world coords of the text's top-left
+    y: number;
+    value: string;
+    fontSize: number;
+    color: string;
+  }
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const editorRef = useRef<Editor | null>(null);
+  const editorKey = useRef(0);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   const stageRef = useRef<Konva.Stage>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -176,21 +272,25 @@ export default function Board() {
 
   // Drop the selection if its shape disappeared (undo, erase, ...).
   useEffect(() => {
-    if (selectedId && !shapesMap[selectedId]) setSelected(null);
-  }, [selectedId, shapesMap, setSelected]);
+    if (selectedIds.some((id) => !shapesMap[id])) {
+      setSelection(selectedIds.filter((id) => shapesMap[id]));
+    }
+  }, [selectedIds, shapesMap, setSelection]);
 
   // Attach the transformer (selection box / resize handles) to the selected node.
   useEffect(() => {
     const stage = stageRef.current;
     const tr = trRef.current;
     if (!stage || !tr) return;
-    const node =
-      selectedId && tool === 'select'
-        ? stage.findOne((n: Konva.Node) => n.id() === selectedId)
-        : null;
-    tr.nodes(node ? [node] : []);
+    const nodes =
+      selectish && !endpointLine
+        ? selectedIds
+            .map((id) => stage.findOne((n: Konva.Node) => n.id() === id))
+            .filter((n): n is Konva.Node => !!n)
+        : [];
+    tr.nodes(nodes);
     tr.getLayer()?.batchDraw();
-  }, [selectedId, shapesMap, tool]);
+  }, [selectedIds, shapesMap, selectish, endpointLine]);
 
   // Hide the eraser ring when another tool is picked.
   useEffect(() => {
@@ -199,6 +299,92 @@ export default function Board() {
       eraserRingRef.current?.getLayer()?.batchDraw();
     }
   }, [tool]);
+
+  const openEditor = (init: Omit<Editor, 'key'>) => {
+    finishEditor(true);
+    const ed = { ...init, key: ++editorKey.current };
+    editorRef.current = ed;
+    setEditor(ed);
+  };
+
+  /** Close the editor, saving (or discarding) its text. `key` ignores stale blur events. */
+  const finishEditor = (save: boolean, key?: number) => {
+    const ed = editorRef.current;
+    if (!ed || (key !== undefined && key !== ed.key)) return;
+    editorRef.current = null;
+    setEditor(null);
+    if (!save) return;
+    const text = ed.value;
+    if (ed.id) {
+      if (text.trim()) updateShape(ed.id, { text });
+      else deleteShapes([ed.id]); // emptied an existing label = delete it
+    } else if (text.trim()) {
+      const id = crypto.randomUUID();
+      addShape({
+        id,
+        z: Date.now(),
+        type: 'text',
+        x: ed.x,
+        y: ed.y,
+        stroke: ed.color,
+        strokeWidth: style.strokeWidth,
+        text,
+        fontSize: ed.fontSize,
+      });
+      setTool('select'); // done typing: select it so it can be moved / recoloured
+      setSelected(id);
+    }
+  };
+
+  const editText = (s: Shape) => {
+    if (s.type !== 'text') return;
+    openEditor({ id: s.id, x: s.x, y: s.y, value: s.text, fontSize: s.fontSize, color: s.stroke });
+  };
+
+  // Focus after the click that opened the editor finishes, otherwise the browser's
+  // default mousedown focus change steals focus straight back and closes it.
+  useEffect(() => {
+    if (!editor) return;
+    const t = window.setTimeout(() => {
+      taRef.current?.focus();
+      taRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [editor?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Edit this text" requested from the keyboard (Enter on a selected label).
+  useEffect(() => {
+    if (!editRequest) return;
+    const s = useDoc.getState().shapes[editRequest];
+    requestEdit(null);
+    if (s) editText(s);
+  }, [editRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Finish a Selection-tool drag: select whatever the rectangle / loop caught. */
+  const finishMarquee = () => {
+    const m = marquee;
+    setMarquee(null);
+    if (!m) return;
+    const all = Object.values(useDoc.getState().shapes);
+    if (m.mode === 'rect') {
+      const r = { x: Math.min(m.x0, m.x1), y: Math.min(m.y0, m.y1), w: Math.abs(m.x1 - m.x0), h: Math.abs(m.y1 - m.y0) };
+      // A bare click on empty canvas just clears the selection.
+      const tiny = r.w * view.scale < 3 && r.h * view.scale < 3;
+      setSelection(tiny ? [] : shapesInRect(all, r));
+    } else {
+      setSelection(shapesInLasso(all, m.pts));
+    }
+  };
+
+  const moveGroup = (node: Konva.Node) => {
+    const g = groupDrag.current;
+    if (!g) return;
+    const dx = node.x() - g.x;
+    const dy = node.y() - g.y;
+    const patches: Record<string, Partial<Shape>> = {};
+    for (const [id, o] of Object.entries(g.orig)) patches[id] = { x: o.x + dx, y: o.y + dy };
+    updateShapes(patches);
+  };
 
   /** Erase along the path a -> b (world coords), in the current eraser mode. */
   const eraseAlong = (a: Pt, b: Pt) => {
@@ -247,9 +433,26 @@ export default function Board() {
   const onDown = (e: Evt) => {
     const stage = e.target.getStage();
     if (!stage) return;
+    if (tool === 'laser') return; // draws nothing; peers see it through presence.ts
 
     if (tool === 'select' || tool === 'hand') {
       if (tool === 'select' && e.target === stage) setSelected(null);
+      return;
+    }
+
+    if (tool === 'marquee') {
+      // Pressing on a shape / handle is left to that node (select + drag it);
+      // pressing on empty canvas starts a selection drag.
+      if (e.target !== stage) return;
+      const p = stage.getRelativePointerPosition();
+      if (!p) return;
+      drawing.current = true;
+      setSelected(null);
+      setMarquee(
+        marqueeMode === 'rect'
+          ? { mode: 'rect', x0: p.x, y0: p.y, x1: p.x, y1: p.y }
+          : { mode: 'free', pts: [p.x, p.y] },
+      );
       return;
     }
 
@@ -265,20 +468,7 @@ export default function Board() {
     }
 
     if (tool === 'text') {
-      const text = window.prompt('Text');
-      if (text && text.trim()) {
-        addShape({
-          id: crypto.randomUUID(),
-          z: Date.now(),
-          type: 'text',
-          x: pos.x,
-          y: pos.y,
-          stroke: style.stroke,
-          strokeWidth: style.strokeWidth,
-          text,
-          fontSize: 24,
-        });
-      }
+      openEditor({ id: null, x: pos.x, y: pos.y, value: '', fontSize: 24, color: style.stroke });
       return;
     }
 
@@ -293,6 +483,8 @@ export default function Board() {
     };
     if (tool === 'rect' || tool === 'ellipse') {
       setDraft({ ...base, type: tool, x: pos.x, y: pos.y, width: 0, height: 0, fill: style.fill });
+    } else if (tool === 'arrow') {
+      setDraft({ ...base, type: 'line', arrow: true, x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y] });
     } else {
       setDraft({ ...base, type: tool, x: 0, y: 0, points: [pos.x, pos.y, pos.x, pos.y] });
     }
@@ -315,6 +507,16 @@ export default function Board() {
         eraseAlong(lastErase.current, pos);
         lastErase.current = pos;
       }
+      return;
+    }
+
+    if (tool === 'marquee') {
+      if (!drawing.current) return;
+      const p = stage.getRelativePointerPosition();
+      if (!p) return;
+      setMarquee((m) =>
+        !m ? m : m.mode === 'rect' ? { ...m, x1: p.x, y1: p.y } : { ...m, pts: [...m.pts, p.x, p.y] },
+      );
       return;
     }
 
@@ -344,6 +546,10 @@ export default function Board() {
     drawing.current = false;
     if (tool === 'eraser') {
       endBatch();
+      return;
+    }
+    if (tool === 'marquee') {
+      finishMarquee();
       return;
     }
     if (draft && isMeaningful(draft)) addShape(draft); // commit once, on release
@@ -401,6 +607,7 @@ export default function Board() {
         scaleX={view.scale}
         scaleY={view.scale}
         draggable={tool === 'select' || tool === 'hand'}
+        onDragStart={() => useUI.getState().setFollow(null)}
         onDragEnd={(e) => {
           if (e.target === e.target.getStage()) {
             setView({ ...view, x: e.target.x(), y: e.target.y() });
@@ -417,18 +624,76 @@ export default function Board() {
       >
         <Layer>
           {shapes.map((s) => (
-            <ShapeNode key={s.id} shape={s} interactive={tool === 'select'} />
+            <ShapeNode
+              key={s.id}
+              shape={s}
+              interactive={selectish && !multi}
+              hidden={editor?.id === s.id}
+              onEditText={selectish ? editText : undefined}
+            />
           ))}
           {draft && (
             <Group listening={false}>
               <ShapeNode shape={draft} interactive={false} />
             </Group>
           )}
+          {groupBounds && (
+            <Rect
+              x={groupBounds.x}
+              y={groupBounds.y}
+              width={groupBounds.w}
+              height={groupBounds.h}
+              fill="rgba(59, 91, 219, 0.05)"
+              stroke="#3b5bdb"
+              strokeWidth={1 / view.scale}
+              dash={[6 / view.scale, 4 / view.scale]}
+              draggable
+              onDragStart={(e) => {
+                beginBatch(); // the whole group drag = one undo step
+                groupDrag.current = {
+                  x: e.target.x(),
+                  y: e.target.y(),
+                  orig: Object.fromEntries(selectedList.map((s) => [s.id, { x: s.x, y: s.y }])),
+                };
+              }}
+              onDragMove={(e) => moveGroup(e.target)}
+              onDragEnd={(e) => {
+                moveGroup(e.target);
+                endBatch();
+                groupDrag.current = null;
+              }}
+            />
+          )}
+          {selectish &&
+            endpointLine &&
+            [0, 1].map((i) => (
+              <Circle
+                key={i}
+                x={endpointLine.x + endpointLine.points[i * 2]}
+                y={endpointLine.y + endpointLine.points[i * 2 + 1]}
+                radius={6 / view.scale}
+                fill="#fff"
+                stroke="#3b5bdb"
+                strokeWidth={2 / view.scale}
+                draggable
+                onDragMove={(e) => {
+                  const points = [...endpointLine.points];
+                  points[i * 2] = e.target.x() - endpointLine.x;
+                  points[i * 2 + 1] = e.target.y() - endpointLine.y;
+                  updateShape(endpointLine.id, { points }, `endpoint:${endpointLine.id}:${i}`);
+                }}
+              />
+            ))}
           <Transformer
             ref={trRef}
             rotateEnabled={false}
             flipEnabled={false}
-            resizeEnabled={resizable}
+            keepRatio={selected?.type === 'text'}
+            enabledAnchors={
+              selected?.type === 'text'
+                ? ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+                : undefined
+            }
             borderStroke="#3b5bdb"
             anchorStroke="#3b5bdb"
             boundBoxFunc={(oldBox, newBox) =>
@@ -437,6 +702,32 @@ export default function Board() {
           />
         </Layer>
         <Layer listening={false}>
+          {/* Small crosshair marking the world origin (0, 0) */}
+          <Line points={[-10 / view.scale, 0, 10 / view.scale, 0]} stroke="#8b95a7" strokeWidth={1.5 / view.scale} />
+          <Line points={[0, -10 / view.scale, 0, 10 / view.scale]} stroke="#8b95a7" strokeWidth={1.5 / view.scale} />
+          {marquee?.mode === 'rect' && (
+            <Rect
+              x={Math.min(marquee.x0, marquee.x1)}
+              y={Math.min(marquee.y0, marquee.y1)}
+              width={Math.abs(marquee.x1 - marquee.x0)}
+              height={Math.abs(marquee.y1 - marquee.y0)}
+              fill="rgba(59, 91, 219, 0.08)"
+              stroke="#3b5bdb"
+              strokeWidth={1 / view.scale}
+              dash={[6 / view.scale, 4 / view.scale]}
+            />
+          )}
+          {marquee?.mode === 'free' && (
+            <Line
+              points={marquee.pts}
+              closed
+              fill="rgba(59, 91, 219, 0.08)"
+              stroke="#3b5bdb"
+              strokeWidth={1.5 / view.scale}
+              dash={[6 / view.scale, 4 / view.scale]}
+              lineJoin="round"
+            />
+          )}
           <Circle
             ref={eraserRingRef}
             radius={eraserSize / 2 / view.scale}
@@ -447,6 +738,56 @@ export default function Board() {
           />
         </Layer>
       </Stage>
+      {editor?.id && (
+        <button
+          className="text-editor-del"
+          title="Delete this text"
+          aria-label="Delete this text"
+          style={{
+            left: view.x + editor.x * view.scale,
+            top: view.y + editor.y * view.scale - 30,
+          }}
+          onMouseDown={(e) => e.preventDefault()} // keep focus so the editor doesn't commit first
+          onClick={() => {
+            const id = editor.id!;
+            editorRef.current = null;
+            setEditor(null);
+            deleteShapes([id]);
+          }}
+        >
+          🗑 Delete
+        </button>
+      )}
+      {editor && (
+        <textarea
+          key={editor.key}
+          ref={taRef}
+          className="text-editor"
+          value={editor.value}
+          rows={Math.max(1, editor.value.split('\n').length)}
+          spellCheck={false}
+          style={{
+            left: view.x + editor.x * view.scale,
+            top: view.y + editor.y * view.scale,
+            fontSize: editor.fontSize * view.scale,
+            width: `${Math.max(3, ...editor.value.split('\n').map((l) => l.length)) + 1}ch`,
+            color: editor.color,
+          }}
+          onChange={(e) => {
+            const next = { ...editor, value: e.target.value };
+            editorRef.current = next;
+            setEditor(next);
+          }}
+          onBlur={() => finishEditor(true, editor.key)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') finishEditor(false);
+            else if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              finishEditor(true);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

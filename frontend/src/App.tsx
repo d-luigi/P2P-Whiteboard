@@ -1,19 +1,24 @@
 import { useEffect } from 'react';
 import Board from './components/Board';
 import Toolbar from './components/Toolbar';
+import Presence from './components/Presence';
+import { RemoteCursors, LaserCanvas } from './components/Cursors';
 import { useDoc } from './docStore';
 import { useUI } from './uiStore';
 import type { Tool } from './types';
 
 const TOOL_KEYS: Record<string, Tool> = {
   v: 'select',
+  m: 'marquee',
   h: 'hand',
   r: 'rect',
   o: 'ellipse',
   l: 'line',
+  a: 'arrow',
   p: 'pen',
   t: 'text',
   e: 'eraser',
+  k: 'laser',
 };
 
 const ARROWS: Record<string, [number, number]> = {
@@ -24,6 +29,8 @@ const ARROWS: Record<string, [number, number]> = {
 };
 
 export default function App() {
+  const status = useDoc((s) => s.status);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
@@ -69,8 +76,19 @@ export default function App() {
       } else if (key === 'delete' || key === 'backspace') {
         e.preventDefault();
         ui.deleteSelected();
+      } else if (key === 'enter') {
+        // Enter on a single selected label opens its text editor.
+        const [only] = ui.selectedIds;
+        if (ui.selectedIds.length === 1 && doc.shapes[only]?.type === 'text') {
+          e.preventDefault();
+          ui.requestEdit(only);
+        }
+      } else if (key === 'home') {
+        e.preventDefault();
+        ui.goHome();
       } else if (key === 'escape') {
-        ui.setSelected(null);
+        ui.setSelection([]);
+        ui.setFollow(null);
       } else if (key === ']') {
         ui.bringToFront();
       } else if (key === '[') {
@@ -85,10 +103,29 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Wait for the saved board to load from IndexedDB, so the first thing drawn is the
+  // real board (not an empty one that is then replaced).
+  if (status === 'loading') {
+    return (
+      <div className="loading" role="status" aria-live="polite">
+        Loading board…
+      </div>
+    );
+  }
+
   return (
     <>
       <Board />
+      <RemoteCursors />
+      <LaserCanvas />
       <Toolbar />
+      <Presence />
+      {status === 'memory' && (
+        <div className="banner" role="alert">
+          Can't save in this browser (private window or blocked storage). You can still draw,
+          but this board will be lost when you close the tab.
+        </div>
+      )}
     </>
   );
 }

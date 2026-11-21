@@ -1,15 +1,21 @@
 /** partial = erase only the part under the cursor (default); stroke = remove the whole shape. */
 export type EraserMode = 'partial' | 'stroke';
 
+/** Selection tool shape: drag a rectangle, or draw a free-form loop. */
+export type MarqueeMode = 'rect' | 'free';
+
 export type Tool =
   | 'select'
+  | 'marquee'
   | 'hand'
   | 'rect'
   | 'ellipse'
   | 'line'
+  | 'arrow'
   | 'pen'
   | 'text'
-  | 'eraser';
+  | 'eraser'
+  | 'laser'; // pointer that only peers see (nothing is drawn)
 
 interface BaseShape {
   id: string;
@@ -38,6 +44,7 @@ export interface EllipseShape extends BaseShape {
 export interface LineShape extends BaseShape {
   type: 'line';
   points: number[]; // [x1, y1, x2, y2], relative to (x, y)
+  arrow?: boolean; // arrowhead at the last point (the Arrow tool creates these)
 }
 
 export interface PenShape extends BaseShape {

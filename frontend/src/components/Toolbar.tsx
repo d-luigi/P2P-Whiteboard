@@ -1,22 +1,31 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
-import type { EraserMode, Tool } from '../types';
+import { boardId, newBoard } from '../board';
+import type { EraserMode, MarqueeMode, Tool } from '../types';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'select', icon: '↖', label: 'Select', key: 'V' },
+  { id: 'marquee', icon: '⬚', label: 'Selection', key: 'M' },
   { id: 'hand', icon: '✋', label: 'Pan', key: 'H' },
   { id: 'rect', icon: '▭', label: 'Rectangle', key: 'R' },
   { id: 'ellipse', icon: '◯', label: 'Ellipse', key: 'O' },
   { id: 'line', icon: '／', label: 'Line', key: 'L' },
+  { id: 'arrow', icon: '→', label: 'Arrow', key: 'A' },
   { id: 'pen', icon: '✎', label: 'Marker', key: 'P' },
   { id: 'text', icon: 'T', label: 'Text', key: 'T' },
   { id: 'eraser', icon: '⌫', label: 'Eraser', key: 'E' },
+  { id: 'laser', icon: '◉', label: 'Laser pointer (visible to others)', key: 'K' },
 ];
 
 const ERASER_MODES: { id: EraserMode; label: string; title: string }[] = [
   { id: 'partial', label: 'Partial', title: 'Erase only the part under the eraser' },
   { id: 'stroke', label: 'Stroke', title: 'Erase the whole stroke or shape you touch' },
+];
+
+const MARQUEE_MODES: { id: MarqueeMode; label: string; title: string }[] = [
+  { id: 'rect', label: 'Rectangle', title: 'Drag a rectangle to select what it touches' },
+  { id: 'free', label: 'Free', title: 'Draw any shape around what you want to select' },
 ];
 
 const STROKE_SIZES = [2, 4, 8, 14, 24]; // px, for marker, lines and shape outlines
@@ -32,14 +41,18 @@ export default function Toolbar() {
     setEraserSize,
     eraserMode,
     setEraserMode,
+    marqueeMode,
+    setMarqueeMode,
     view,
     zoomAt,
     resetView,
-    selectedId,
+    centerOn,
+    goHome,
+    selectedIds,
     deleteSelected,
   } = useUI();
-  const canUndo = useDoc((s) => s.past.length > 0);
-  const canRedo = useDoc((s) => s.future.length > 0);
+  const canUndo = useDoc((s) => s.canUndo);
+  const canRedo = useDoc((s) => s.canRedo);
   const undo = useDoc((s) => s.undo);
   const redo = useDoc((s) => s.redo);
 
@@ -50,6 +63,27 @@ export default function Toolbar() {
   const sizes = isEraser ? ERASER_SIZES : STROKE_SIZES;
   const currentSize = isEraser ? eraserSize : style.strokeWidth;
   const dotSize = (s: number) => (isEraser ? Math.max(5, s / 5) : Math.min(s, 18));
+
+  // Go-to-coordinates popover. The world point at the middle of the screen is "where you are".
+  const [goOpen, setGoOpen] = useState(false);
+  const [gx, setGx] = useState('');
+  const [gy, setGy] = useState('');
+  const cx = Math.round((window.innerWidth / 2 - view.x) / view.scale);
+  const cy = Math.round((window.innerHeight / 2 - view.y) / view.scale);
+  const toggleGo = () => {
+    setGx(String(cx));
+    setGy(String(cy));
+    setGoOpen((o) => !o);
+  };
+  const submitGo = (e: FormEvent) => {
+    e.preventDefault();
+    const x = Number(gx.trim());
+    const y = Number(gy.trim());
+    if (gx.trim() === '' || gy.trim() === '' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const LIMIT = 1e7; // keep clear of floating-point trouble
+    centerOn(Math.max(-LIMIT, Math.min(LIMIT, x)), Math.max(-LIMIT, Math.min(LIMIT, y)));
+    setGoOpen(false);
+  };
 
   const zoomCentre = (factor: number) =>
     zoomAt(window.innerWidth / 2, window.innerHeight / 2, factor);
@@ -91,6 +125,22 @@ export default function Toolbar() {
           ↷
         </button>
       </div>
+
+      {tool === 'marquee' && (
+        <div className="group" role="group" aria-label="Selection mode">
+          {MARQUEE_MODES.map((m) => (
+            <button
+              key={m.id}
+              className={`btn wide ${marqueeMode === m.id ? 'active' : ''}`}
+              title={m.title}
+              aria-pressed={marqueeMode === m.id}
+              onClick={() => setMarqueeMode(m.id)}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {isEraser && (
         <div className="group" role="group" aria-label="Eraser mode">
@@ -158,11 +208,77 @@ export default function Toolbar() {
           className="btn"
           title="Delete selected (Del)"
           aria-label="Delete selected"
-          disabled={!selectedId}
+          disabled={selectedIds.length === 0}
           onClick={deleteSelected}
         >
           🗑
         </button>
+      </div>
+
+      <div className="group">
+        <span className="board-id" title={`Board ${boardId}. Saved in this browser; bookmark this link to return.`}>
+          {boardId.slice(0, 6)}
+        </span>
+        <button
+          className="btn"
+          title="New board (the current one stays saved at its link)"
+          aria-label="New board"
+          onClick={newBoard}
+        >
+          ＋
+        </button>
+      </div>
+
+      <div className="group goto">
+        <button
+          className="btn"
+          title="Back to the centre (0, 0) (Home)"
+          aria-label="Back to centre"
+          onClick={goHome}
+        >
+          ⌂
+        </button>
+        <button
+          className={`btn wide coords ${goOpen ? 'active' : ''}`}
+          title="Go to coordinates"
+          aria-label="Go to coordinates"
+          aria-expanded={goOpen}
+          onClick={toggleGo}
+        >
+          {cx}, {cy}
+        </button>
+        {goOpen && (
+          <form
+            className="goto-pop"
+            onSubmit={submitGo}
+            onKeyDown={(e) => e.key === 'Escape' && setGoOpen(false)}
+          >
+            <label className="field">
+              X
+              <input
+                type="text"
+                inputMode="decimal"
+                autoFocus
+                value={gx}
+                onChange={(e) => setGx(e.target.value)}
+                onFocus={(e) => e.target.select()}
+              />
+            </label>
+            <label className="field">
+              Y
+              <input
+                type="text"
+                inputMode="decimal"
+                value={gy}
+                onChange={(e) => setGy(e.target.value)}
+                onFocus={(e) => e.target.select()}
+              />
+            </label>
+            <button type="submit" className="btn wide go">
+              Go
+            </button>
+          </form>
+        )}
       </div>
 
       <div className="group">

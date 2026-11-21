@@ -2,7 +2,7 @@ import type { LineShape, PenShape, Shape } from './types';
 
 /**
  * Geometry for the eraser. Pure functions, no React / store access, so it can be
- * tested on its own and reused when the document moves to Yjs.
+ * tested on its own; it works on plain shape objects, independent of how they are stored.
  */
 
 /** Distance from point p to the segment a-b. */
@@ -170,7 +170,16 @@ function clipShape(
   const pieces = clipPolyline(line.points, cx - line.x, cy - line.y, R, closed);
   if (!pieces) return null;
   // The first piece keeps the original id (and so its selection / identity).
-  return pieces.map((points, i) => ({ ...line, id: i === 0 ? line.id : newId(), points }));
+  const lastX = line.points[line.points.length - 2];
+  const lastY = line.points[line.points.length - 1];
+  return pieces.map((points, i) => {
+    const piece = { ...line, id: i === 0 ? line.id : newId(), points } as typeof line;
+    if (piece.type === 'line' && piece.arrow) {
+      // Only the piece that still ends where the original ended keeps its arrowhead.
+      piece.arrow = points[points.length - 2] === lastX && points[points.length - 1] === lastY;
+    }
+    return piece;
+  });
 }
 
 /**
