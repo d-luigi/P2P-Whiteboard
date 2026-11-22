@@ -28,12 +28,22 @@ function client(headers) {
     ws.on('message', (d) => ws.inbox.push(JSON.parse(d.toString())));
     ws.on('open', () => resolve(ws));
     ws.on('error', reject);
-    ws.on('unexpected-response', (_req, res) => reject(new Error(`HTTP ${res.statusCode}`)));
+    ws.on('unexpected-response', (req, res) => {
+      req.on('error', reject);
+      res.resume();
+      reject(new Error(`HTTP ${res.statusCode}`));
+    });
   });
 }
 
 const get = (path) =>
-  new Promise((resolve) => http.get({ port: PORT, host: '127.0.0.1', path }, (res) => resolve(res.statusCode)));
+  new Promise((resolve, reject) => {
+    http.get({ port: PORT, host: '127.0.0.1', path, agent: false }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
 
 async function main() {
   let server = await start();
@@ -75,6 +85,18 @@ async function main() {
     a.send(JSON.stringify({ type: 'publish', topic: 'room-1', data: 'again' }));
     await sleep(100);
     assert.equal(b.inbox.length, 1, 'unsubscribed client gets nothing more');
+
+    a.send(JSON.stringify({ type: 'room-register', id: 'register', fragment: 'existing-board.pw' }));
+    await sleep(100);
+    const code = a.inbox.at(-1).code;
+    assert.match(code, /^[A-Z2-9]{6}$/);
+    b.send(JSON.stringify({ type: 'room-resolve', id: 'join', code: code.toLowerCase() }));
+    await sleep(100);
+    assert.deepEqual(b.inbox.at(-1), { type: 'room-result', id: 'join', fragment: 'existing-board.pw' });
+    b.send(JSON.stringify({ type: 'room-resolve', id: 'missing', code: 'INVALID' }));
+    await sleep(100);
+    assert.ok(b.inbox.at(-1).error, 'missing codes return an error rather than a new board');
+    console.log('ok   short code registration, cross-client lookup, password flag, missing code');
 
     [a, b, c].forEach((w) => w.close());
     console.log('ok   protocol: subscribe, publish, isolation, ping, bad input, unsubscribe');

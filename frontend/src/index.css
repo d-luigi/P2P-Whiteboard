@@ -205,6 +205,28 @@ body,
   user-select: all;
 }
 
+.board-code {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+  font-size: 11px;
+  color: #606774;
+}
+
+.board-code input {
+  max-width: 100%;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: #263238;
+  font-family: monospace;
+  font-size: 13px;
+  cursor: copy;
+}
+
 /* Go-to-coordinates */
 .goto {
   position: relative;
