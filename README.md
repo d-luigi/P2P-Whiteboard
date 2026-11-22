@@ -13,6 +13,10 @@
 
 ## Demo video
 
+
+https://github.com/user-attachments/assets/ce9bfe50-1577-47ce-a83d-0253705fdbd9
+
+
 <video controls preload="metadata" width="100%" poster="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.jpg">
   <source src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.mp4" type="video/mp4">
   <a href="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.mp4">Download or play brag.mp4</a>
