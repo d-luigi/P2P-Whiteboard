@@ -1,0 +1,12 @@
+{
+  "name": "p2pwb",
+  "private": true,
+  "description": "Peer-to-peer collaborative whiteboard (Yjs + WebRTC)",
+  "scripts": {
+    "setup": "npm --prefix frontend install && npm --prefix signaling install",
+    "dev": "npm --prefix frontend run dev",
+    "signal": "npm --prefix signaling start",
+    "build": "npm --prefix frontend run build",
+    "test:signal": "npm --prefix signaling test"
+  }
+}

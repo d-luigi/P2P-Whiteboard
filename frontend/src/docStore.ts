@@ -1,7 +1,8 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { create } from 'zustand';
-import { boardId } from './board';
+import { boardId, readOnly } from './board';
+import { sanitizeShape } from './validate';
 import type { Shape } from './types';
 
 type Shapes = Record<string, Shape>;
@@ -28,7 +29,9 @@ type Shapes = Record<string, Shape>;
  */
 // gc: false keeps deleted content in the document instead of discarding it. That is what lets
 // undo/redo still work after a reload: undoing a delete has to bring the old content back.
-// (Trade-off: deleted shapes and old values stay in the saved board, so it grows a little.)
+// The cost is that deleted shapes and old values pile up, so the board is COMPACTED (garbage
+// collected) when it has grown large: see "backup, size, compaction" below. Compacting drops
+// the deleted content, and with it the saved undo history.
 export const ydoc = new Y.Doc({ gc: false });
 export const yShapes = ydoc.getMap<Y.Map<unknown>>('shapes');
 
@@ -72,10 +75,17 @@ function upsert(shape: Shape) {
   applyPatch(existing, shape);
 }
 
+/** A shape as the canvas may draw it, or null if it is missing or malformed (peers are untrusted). */
+function readShape(id: string): Shape | null {
+  const m = yShapes.get(id);
+  return m instanceof Y.Map ? sanitizeShape(m.toJSON()) : null;
+}
+
 function readAll(): Shapes {
   const out: Shapes = {};
-  yShapes.forEach((m, id) => {
-    out[id] = m.toJSON() as Shape;
+  yShapes.forEach((_m, id) => {
+    const shape = readShape(id);
+    if (shape) out[id] = shape;
   });
   return out;
 }
@@ -98,6 +108,7 @@ function fromBase64(b64: string) {
 
 /** Bring boards saved by earlier versions (localStorage) into this empty board. */
 function importLegacy() {
+  if (readOnly) return;
   try {
     const state = localStorage.getItem(LEGACY_STATE_KEY);
     const json = localStorage.getItem(LEGACY_JSON_KEY);
@@ -124,10 +135,22 @@ function importLegacy() {
  */
 export type DocStatus = 'loading' | 'ready' | 'memory';
 
+// Compaction writes a fresh database under a new "generation" name and then switches to it,
+// so the old data stays intact until the new copy is safely stored.
+const GEN_KEY = `p2pwb:gen:${boardId}`;
+const generation = (() => {
+  try {
+    return localStorage.getItem(GEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+})();
+const dbName = (gen: string) => `p2pwb:board:${boardId}${gen ? `:${gen}` : ''}`;
+
 let persistence: IndexeddbPersistence | null = null;
 try {
   if (typeof indexedDB !== 'undefined') {
-    persistence = new IndexeddbPersistence(`p2pwb:board:${boardId}`, ydoc);
+    persistence = new IndexeddbPersistence(dbName(generation), ydoc);
   }
 } catch {
   persistence = null; // e.g. blocked in a private window
@@ -255,6 +278,7 @@ function startsNewStep(coalesceKey?: string): boolean {
 
 /** Run `fn` as one Yjs transaction, and as a new or merged undo step. */
 function run(fn: () => void, coalesceKey?: string) {
+  if (readOnly) return; // view-only: no edits (see board.ts)
   if (startsNewStep(coalesceKey)) undoManager.stopCapturing();
   ydoc.transact(fn, LOCAL);
 }
@@ -328,11 +352,13 @@ export const useDoc = create<DocState>(() => ({
   },
 
   undo: () => {
+    if (readOnly) return;
     undoManager.undo();
     undoManager.stopCapturing(); // the next edit must not merge into the step we just popped
     lastKey = null;
   },
   redo: () => {
+    if (readOnly) return;
     undoManager.redo();
     undoManager.stopCapturing();
     lastKey = null;
@@ -349,15 +375,16 @@ yShapes.observeDeep((events) => {
     if (ev.target === yShapes) {
       (ev as Y.YMapEvent<Y.Map<unknown>>).keysChanged.forEach((k) => touched.add(k));
     } else {
-      const id = (ev.target as Y.Map<unknown>).get('id'); // a single shape's field changed
+      const target = ev.target as Y.Map<unknown>;
+      const id = target instanceof Y.Map ? target.get('id') : undefined; // a single shape's field changed
       if (typeof id === 'string') touched.add(id);
     }
   }
   const next = { ...useDoc.getState().shapes };
   for (const id of touched) {
-    const m = yShapes.get(id);
-    if (m) next[id] = m.toJSON() as Shape;
-    else delete next[id];
+    const shape = readShape(id);
+    if (shape) next[id] = shape;
+    else delete next[id]; // gone, or malformed (never reaches the canvas)
   }
   useDoc.setState({ shapes: next });
 });
@@ -375,16 +402,137 @@ for (const ev of ['stack-item-added', 'stack-item-updated', 'stack-item-popped',
 }
 window.addEventListener('pagehide', saveUndo);
 
+/* ---------- backup, size, compaction ---------- */
+
+export interface BoardStats {
+  shapes: number;
+  /** Size of the whole saved document, including deleted content not yet compacted. */
+  bytes: number;
+}
+
+export function boardStats(): BoardStats {
+  return {
+    shapes: Object.keys(useDoc.getState().shapes).length,
+    bytes: Y.encodeStateAsUpdate(ydoc).byteLength,
+  };
+}
+
+/** The whole board as one binary snapshot (a Yjs update). Import it into any board to merge it in. */
+export function exportBackup(): Uint8Array {
+  return Y.encodeStateAsUpdate(ydoc);
+}
+
+/** Merge a backup into this board as ONE undo step. Returns how many shapes it contained. */
+export function importBackup(bytes: Uint8Array): number {
+  if (readOnly) throw new Error('This board is view-only.');
+  const probe = new Y.Doc();
+  let count = 0;
+  try {
+    Y.applyUpdate(probe, bytes);
+    probe.getMap<Y.Map<unknown>>('shapes').forEach((m) => {
+      if (m instanceof Y.Map && sanitizeShape(m.toJSON())) count++;
+    });
+  } catch {
+    throw new Error('That file is not a whiteboard backup.');
+  } finally {
+    probe.destroy();
+  }
+  if (count === 0) throw new Error('That backup has no shapes in it.');
+  undoManager.stopCapturing();
+  ydoc.transact(() => Y.applyUpdate(ydoc, bytes), LOCAL);
+  undoManager.stopCapturing();
+  return count;
+}
+
+/** Add many shapes at once, not undoable. For the dev stress test (stress.ts) only. */
+export function bulkAddShapes(shapes: Shape[]) {
+  ydoc.transact(() => shapes.forEach(upsert), LOAD);
+}
+
+const COMPACT_MIN_BYTES = 4 * 1024 * 1024; // don't bother below this size
+const COMPACT_MIN_SAVING = 0.5; // ...and only if at least half of it is garbage
+const COMPACT_TRIED_KEY = `p2pwb:compactTried:${boardId}`; // per tab session: never loops
+export const NOTICE_KEY = 'p2pwb:notice'; // shown once as a toast after the reload
+
+const mb = (n: number) => `${(n / 1048576).toFixed(1)} MB`;
+
+/** Re-encode the board through a garbage-collecting document: same shapes, no deleted content. */
+function measureCompact() {
+  const full = Y.encodeStateAsUpdate(ydoc);
+  const fresh = new Y.Doc({ gc: true });
+  Y.applyUpdate(fresh, full);
+  const compact = Y.encodeStateAsUpdate(fresh);
+  fresh.destroy();
+  return { full: full.byteLength, compact };
+}
+
+/**
+ * Garbage-collect this board: save the compacted copy to a new database, switch to it and
+ * reload. Deleted content is gone afterwards, and so is the saved undo history (it refers to
+ * that content). The old database is only removed after the new one is safely written.
+ */
+async function writeCompactAndReload(compact: Uint8Array, before: number) {
+  if (!persistence) throw new Error('This browser is not saving the board, so there is nothing to compact.');
+  const tmp = new Y.Doc({ gc: true });
+  Y.applyUpdate(tmp, compact);
+  const gen = Date.now().toString(36);
+  const next = new IndexeddbPersistence(dbName(gen), tmp); // stores the doc's state when it opens
+  await next.whenSynced;
+  await next.destroy();
+  tmp.destroy();
+  try {
+    localStorage.setItem(GEN_KEY, gen);
+    localStorage.removeItem(UNDO_KEY);
+    sessionStorage.setItem(NOTICE_KEY, `Board compacted: ${mb(before)} → ${mb(compact.byteLength)}. Undo history was reset.`);
+  } catch {
+    /* ignore */
+  }
+  indexedDB.deleteDatabase(dbName(generation)); // best effort: waits until this page has reloaded
+  location.reload();
+}
+
+/** Manual "Compact board" (BoardMenu). Resolves only if it could not reload. */
+export async function compactBoard() {
+  if (readOnly) throw new Error('This board is view-only.');
+  const { full, compact } = measureCompact();
+  await writeCompactAndReload(compact, full);
+}
+
+/** On load: compact automatically when the board is big and mostly garbage. True = reloading. */
+async function maybeAutoCompact(): Promise<boolean> {
+  if (readOnly || !persistence) return false;
+  try {
+    if (sessionStorage.getItem(COMPACT_TRIED_KEY)) return false;
+    const size = Y.encodeStateAsUpdate(ydoc).byteLength;
+    if (size < COMPACT_MIN_BYTES) return false;
+    const { full, compact } = measureCompact();
+    if (compact.byteLength > full * (1 - COMPACT_MIN_SAVING)) return false;
+    sessionStorage.setItem(COMPACT_TRIED_KEY, '1');
+    await writeCompactAndReload(compact, full);
+    return true;
+  } catch (err) {
+    console.error('Automatic compaction failed; continuing with the existing data', err);
+    return false;
+  }
+}
+
 /* ---------- loading gate ---------- */
 
 if (persistence) {
   // y-indexeddb applies the saved updates to `ydoc` first, then fires "synced". The
   // observer above has already mirrored them into the store by the time we mark ready.
-  persistence.whenSynced.then(() => {
-    if (yShapes.size === 0) importLegacy(); // brand-new board: adopt pre-Phase-3 data once
-    restoreUndo(); // bring back this board's saved undo / redo history
-    useDoc.setState({ status: 'ready' });
-  });
+  persistence.whenSynced
+    .then(async () => {
+      if (yShapes.size === 0) importLegacy(); // brand-new board: adopt pre-Phase-3 data once
+      if (await maybeAutoCompact()) return; // reloading: stay on the loading screen
+      restoreUndo(); // bring back this board's saved undo / redo history
+      useDoc.setState({ status: 'ready' });
+    })
+    .catch((err) => {
+      console.error('Loading the saved board failed', err);
+      restoreUndo();
+      useDoc.setState({ status: 'memory' });
+    });
   window.setTimeout(() => {
     if (useDoc.getState().status === 'loading') useDoc.setState({ status: 'memory' });
   }, SYNC_TIMEOUT_MS);

@@ -5,6 +5,7 @@ import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
 import { distToShape, erasePartial } from '../erase';
 import { shapesInLasso, shapesInRect, unionBounds } from '../selection';
+import { viewportRect, visibleShapes } from '../visible';
 import type { LineShape, Shape } from '../types';
 
 type Evt = Konva.KonvaEventObject<MouseEvent | TouchEvent>;
@@ -253,11 +254,28 @@ export default function Board() {
     color: string;
   }
   const [editor, setEditor] = useState<Editor | null>(null);
+
+  // Performance: only shapes near the screen are given to the canvas (see visible.ts). Selected
+  // shapes and the one being edited are always drawn, so handles and the text editor work.
+  const editingId = editor?.id;
+  const always = useMemo(
+    () => new Set<string>([...selectedIds, ...(editingId ? [editingId] : [])]),
+    [selectedIds, editingId],
+  );
+  const vp = viewportRect(view, size.w, size.h);
+  const drawn = useMemo(
+    () => visibleShapes(shapes, vp, always),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shapes, vp.x, vp.y, vp.w, vp.h, always],
+  );
   const editorRef = useRef<Editor | null>(null);
   const editorKey = useRef(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   const stageRef = useRef<Konva.Stage>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef(false); // two fingers down: a pinch/pan gesture owns the touches
+  const [pinching, setPinching] = useState(false);
   const trRef = useRef<Konva.Transformer>(null);
   const eraserRingRef = useRef<Konva.Circle>(null);
   const drawing = useRef(false);
@@ -269,6 +287,65 @@ export default function Board() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Touch: two fingers pinch to zoom and drag to pan, whatever tool is active. (One finger keeps
+  // its normal job: draw, select or pan with the Hand tool.) Done with pointer events on the
+  // container; the second finger cancels whatever the first one started.
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const fingers = new Map<number, Pt>();
+    let prev: { d: number; mx: number; my: number } | null = null;
+
+    const measure = () => {
+      const [a, b] = [...fingers.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+    };
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size === 2) {
+        pinchRef.current = true;
+        setPinching(true);
+        if (drawing.current && useUI.getState().tool === 'eraser') endBatch(); // close its undo step
+        drawing.current = false;
+        setDraft(null);
+        setMarquee(null);
+        stageRef.current?.stopDrag();
+        prev = measure();
+      }
+    };
+    const move = (e: PointerEvent) => {
+      if (!fingers.has(e.pointerId)) return;
+      fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (fingers.size >= 2 && prev) {
+        const cur = measure();
+        const ui = useUI.getState();
+        ui.zoomAt(prev.mx, prev.my, cur.d / prev.d); // zoom about where the fingers were
+        const v = useUI.getState().view;
+        ui.setView({ ...v, x: v.x + (cur.mx - prev.mx), y: v.y + (cur.my - prev.my) }); // then pan
+        prev = cur;
+      }
+    };
+    const up = (e: PointerEvent) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (fingers.size < 2) prev = null;
+      if (fingers.size === 0) {
+        pinchRef.current = false;
+        setPinching(false);
+      }
+    };
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointermove', move, true);
+    el.addEventListener('pointerup', up, true);
+    el.addEventListener('pointercancel', up, true);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointermove', move, true);
+      el.removeEventListener('pointerup', up, true);
+      el.removeEventListener('pointercancel', up, true);
+    };
+  }, [endBatch]);
 
   // Drop the selection if its shape disappeared (undo, erase, ...).
   useEffect(() => {
@@ -434,6 +511,7 @@ export default function Board() {
     const stage = e.target.getStage();
     if (!stage) return;
     if (tool === 'laser') return; // draws nothing; peers see it through presence.ts
+    if (pinchRef.current) return; // a second finger started a pinch: not a new stroke
 
     if (tool === 'select' || tool === 'hand') {
       if (tool === 'select' && e.target === stage) setSelected(null);
@@ -590,7 +668,10 @@ export default function Board() {
 
   return (
     <div
+      ref={boardRef}
       className="board"
+      role="region"
+      aria-label="Whiteboard canvas"
       style={{
         cursor,
         backgroundImage: 'radial-gradient(#c3c9d4 1px, transparent 1px)',
@@ -606,7 +687,7 @@ export default function Board() {
         y={view.y}
         scaleX={view.scale}
         scaleY={view.scale}
-        draggable={tool === 'select' || tool === 'hand'}
+        draggable={!pinching && (tool === 'select' || tool === 'hand')}
         onDragStart={() => useUI.getState().setFollow(null)}
         onDragEnd={(e) => {
           if (e.target === e.target.getStage()) {
@@ -623,7 +704,7 @@ export default function Board() {
         onMouseLeave={onLeave}
       >
         <Layer>
-          {shapes.map((s) => (
+          {drawn.map((s) => (
             <ShapeNode
               key={s.id}
               shape={s}

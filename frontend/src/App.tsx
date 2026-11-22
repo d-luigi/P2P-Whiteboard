@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import Board from './components/Board';
 import Toolbar from './components/Toolbar';
 import Presence from './components/Presence';
+import Toasts from './components/Toasts';
+import PasswordGate from './components/PasswordGate';
+import Shortcuts from './components/Shortcuts';
+import EmptyState from './components/EmptyState';
+import A11y from './components/A11y';
+import { readOnly } from './board';
 import { RemoteCursors, LaserCanvas } from './components/Cursors';
 import { useDoc } from './docStore';
 import { useUI } from './uiStore';
@@ -37,7 +43,7 @@ export default function App() {
       const typing =
         el.tagName === 'TEXTAREA' ||
         el.tagName === 'SELECT' ||
-        (el instanceof HTMLInputElement && el.type === 'text');
+        (el instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'color', 'range', 'file'].includes(el.type));
       if (typing) return;
 
       const ui = useUI.getState();
@@ -83,6 +89,9 @@ export default function App() {
           e.preventDefault();
           ui.requestEdit(only);
         }
+      } else if (key === '?') {
+        e.preventDefault();
+        ui.setHelp(!ui.helpOpen);
       } else if (key === 'home') {
         e.preventDefault();
         ui.goHome();
@@ -108,6 +117,7 @@ export default function App() {
   if (status === 'loading') {
     return (
       <div className="loading" role="status" aria-live="polite">
+        <span className="spinner" aria-hidden="true" />
         Loading board…
       </div>
     );
@@ -120,6 +130,16 @@ export default function App() {
       <LaserCanvas />
       <Toolbar />
       <Presence />
+      <EmptyState />
+      <PasswordGate />
+      <Shortcuts />
+      <Toasts />
+      <A11y />
+      {readOnly && (
+        <div className="viewonly" role="status">
+          👁 View-only: you can look around and use the laser pointer
+        </div>
+      )}
       {status === 'memory' && (
         <div className="banner" role="alert">
           Can't save in this browser (private window or blocked storage). You can still draw,

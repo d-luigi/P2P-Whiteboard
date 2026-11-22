@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
-import { boardId, newBoard } from '../board';
+import { boardId, newBoard, readOnly } from '../board';
+import BoardMenu from './BoardMenu';
 import type { EraserMode, MarqueeMode, Tool } from '../types';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
@@ -89,9 +90,9 @@ export default function Toolbar() {
     zoomAt(window.innerWidth / 2, window.innerHeight / 2, factor);
 
   return (
-    <div className="toolbar" role="toolbar" aria-label="Whiteboard tools">
+    <div className={`toolbar ${readOnly ? 'readonly' : ''}`} role="toolbar" aria-label="Whiteboard tools">
       <div className="group">
-        {TOOLS.map((t) => (
+        {(readOnly ? TOOLS.filter((t) => t.id === 'hand' || t.id === 'laser') : TOOLS).map((t) => (
           <button
             key={t.id}
             className={`btn ${tool === t.id ? 'active' : ''}`}
@@ -105,7 +106,7 @@ export default function Toolbar() {
         ))}
       </div>
 
-      <div className="group">
+      <div className="group edit-only">
         <button
           className="btn"
           title="Undo (Ctrl+Z)"
@@ -158,7 +159,7 @@ export default function Toolbar() {
         </div>
       )}
 
-      <div className="group" role="group" aria-label={isEraser ? 'Eraser size' : 'Stroke size'}>
+      <div className="group edit-only" role="group" aria-label={isEraser ? 'Eraser size' : 'Stroke size'}>
         {sizes.map((s) => (
           <button
             key={s}
@@ -176,7 +177,7 @@ export default function Toolbar() {
         ))}
       </div>
 
-      <div className="group">
+      <div className="group edit-only">
         <label className="field" title="Stroke colour">
           Stroke
           <input
@@ -203,7 +204,7 @@ export default function Toolbar() {
         </label>
       </div>
 
-      <div className="group">
+      <div className="group edit-only">
         <button
           className="btn"
           title="Delete selected (Del)"
@@ -227,6 +228,7 @@ export default function Toolbar() {
         >
           ＋
         </button>
+        <BoardMenu />
       </div>
 
       <div className="group goto">

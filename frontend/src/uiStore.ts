@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useDoc } from './docStore';
-import { boardId } from './board';
+import { boardId, readOnly } from './board';
 import type { EraserMode, MarqueeMode, Shape, Style, Tool, View } from './types';
 
 /**
@@ -78,6 +78,8 @@ interface UIState {
   view: View;
   /** Awareness id of the peer whose camera we are following, or null. */
   followId: number | null;
+  helpOpen: boolean; // keyboard shortcuts dialog
+  setHelp: (open: boolean) => void;
   setFollow: (id: number | null) => void;
   setTool: (tool: Tool) => void;
   setSelected: (id: string | null) => void;
@@ -108,7 +110,9 @@ const selectedShapes = (ids: string[]): Shape[] => {
 };
 
 export const useUI = create<UIState>((set, get) => ({
-  tool: 'select',
+  tool: readOnly ? 'hand' : 'select',
+  helpOpen: false,
+  setHelp: (helpOpen) => set({ helpOpen }),
   selectedIds: [],
   style: { stroke: '#1f2430', fill: 'transparent', strokeWidth: 4 },
   eraserSize: 24,
@@ -119,11 +123,14 @@ export const useUI = create<UIState>((set, get) => ({
   view: loadView(), // last position on this board, or the origin (0, 0) if none saved
 
   // Only the two selection tools keep a selection alive.
-  setTool: (tool) =>
+  setTool: (tool) => {
+    // A view-only tab can look around and point, nothing else.
+    if (readOnly && tool !== 'hand' && tool !== 'laser') return;
     set((s) => ({
       tool,
       selectedIds: tool === 'select' || tool === 'marquee' ? s.selectedIds : [],
-    })),
+    }));
+  },
 
   setSelected: (id) => set({ selectedIds: id ? [id] : [] }),
   setSelection: (selectedIds) => set({ selectedIds }),

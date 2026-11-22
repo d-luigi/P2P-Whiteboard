@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { provider } from './sync';
+import { awareness } from './sync';
 import { useUI, centredView, MIN_SCALE, MAX_SCALE } from './uiStore';
 import type { View } from './types';
 
@@ -43,7 +43,6 @@ export const PALETTE = [
 const COLOR_RE = /^#[0-9a-f]{6}$/i;
 const NAME_MAX = 24;
 
-const awareness = provider.awareness;
 export const myId = awareness.clientID;
 
 /* ---------- my identity (remembered in this browser, shared by all boards) ---------- */
@@ -110,7 +109,7 @@ export function setColor(color: string) {
 
 /* ---------- sending my state (throttled) ---------- */
 
-function makeSender(field: string, ms: number) {
+function makeSender(field: string, baseMs: number) {
   let pending: unknown;
   let has = false;
   let timer = 0;
@@ -124,8 +123,11 @@ function makeSender(field: string, ms: number) {
     }
   };
   return (value: unknown, immediate = false) => {
+    if (document.hidden && !immediate) return; // nobody is watching a hidden tab's cursor
     pending = value;
     has = true;
+    // With a crowd, every peer's updates fan out to everyone else: send less often.
+    const ms = awareness.getStates().size > 6 ? baseMs * 2.5 : baseMs;
     const wait = ms - (performance.now() - last);
     if (immediate || wait <= 0) {
       clearTimeout(timer);

@@ -1,0 +1,17 @@
+{
+  "name": "p2pwb-signaling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tiny WebSocket signalling server: introduces browsers to each other so they can connect peer to peer (WebRTC). It never sees drawing data.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

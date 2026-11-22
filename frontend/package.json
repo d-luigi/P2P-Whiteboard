@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "signal": "node node_modules/y-webrtc/bin/server.js"
+    "preview": "vite preview"
   },
   "dependencies": {
     "konva": "^9.3.14",
@@ -15,6 +14,7 @@
     "react-dom": "^18.3.1",
     "react-konva": "^18.2.10",
     "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.6",
     "y-webrtc": "^10.3.0",
     "yjs": "^13.6.18",
     "zustand": "^4.5.5"

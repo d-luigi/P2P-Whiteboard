@@ -1,7 +1,9 @@
 import { WebrtcProvider } from 'y-webrtc';
+import { Awareness } from 'y-protocols/awareness';
 import { create } from 'zustand';
 import { ydoc } from './docStore';
-import { boardId } from './board';
+import { boardId, getPassword, passwordProtected, passwordsSupported } from './board';
+import { sha256Hex } from './sha256';
 
 /**
  * LIVE SYNC: connects this board's Y.Doc to everyone else who has the same board link.
@@ -13,7 +15,11 @@ import { boardId } from './board';
  *    through it; tabs of the same browser also sync via BroadcastChannel without it.
  *  - Between different networks you need (1) a signalling server that both can reach and
  *    (2) sometimes a TURN relay. See .env.example.
- *  - `provider.awareness` carries the ephemeral per-user state (cursor, name, colour, camera,
+ *  - The room name is a SHA-256 of the secret board ID, so the signalling server (which sees
+ *    room names) never learns the ID and can't join your board.
+ *  - Optional password: y-webrtc encrypts the signalling messages with it, so people without
+ *    it can't even connect. (It does not encrypt what is saved in this browser.)
+ *  - `awareness` carries the ephemeral per-user state (cursor, name, colour, camera,
  *    laser): see presence.ts. It is never saved in the document.
  *
  * Remote updates arrive with the provider as their transaction origin, so the undo manager
@@ -32,16 +38,39 @@ const iceServers: RTCIceServer[] = [
 ];
 if (env.VITE_TURN_URL) {
   iceServers.push({
-    urls: env.VITE_TURN_URL,
+    urls: env.VITE_TURN_URL.split(',').map((u) => u.trim()).filter(Boolean),
     username: env.VITE_TURN_USER,
     credential: env.VITE_TURN_CREDENTIAL,
   });
 }
 
-export const provider = new WebrtcProvider(`p2pwb:${boardId}`, ydoc, {
-  signaling,
-  peerOpts: { config: { iceServers } },
-});
+/** Ephemeral per-user state (cursor, name, ...). Created here so it exists even if connecting fails. */
+export const awareness = new Awareness(ydoc);
+
+let initError: string | null = null;
+let needsPassword = false;
+let provider: WebrtcProvider | null = null;
+
+const password = getPassword();
+if (passwordProtected && !password) {
+  needsPassword = true; // PasswordGate asks; we connect to no one until then
+} else if (password && !passwordsSupported) {
+  initError = 'Passwords need https:// or localhost, so this board is not connected. Open it from a secure address.';
+} else {
+  try {
+    provider = new WebrtcProvider(`p2pwb:${sha256Hex(`p2pwb:room:v1:${boardId}`)}`, ydoc, {
+      signaling,
+      password: password ?? undefined,
+      awareness,
+      peerOpts: { config: { iceServers } },
+    });
+  } catch (err) {
+    console.error('Could not start live sync', err);
+    initError = 'Live sync could not start in this browser. You can still draw; changes are saved here.';
+  }
+}
+
+export { provider };
 
 interface SyncState {
   /** The browser itself reports a network connection. */
@@ -54,6 +83,10 @@ interface SyncState {
   webrtcPeers: number;
   /** Caught up with every WebRTC peer. */
   synced: boolean;
+  /** The board is password protected and we don't have the password yet. */
+  needsPassword: boolean;
+  /** Why live sync is not running, if it isn't. */
+  syncError: string | null;
 }
 
 export const useSync = create<SyncState>(() => ({
@@ -62,6 +95,8 @@ export const useSync = create<SyncState>(() => ({
   peers: 0,
   webrtcPeers: 0,
   synced: false,
+  needsPassword,
+  syncError: initError,
 }));
 
 export type ConnectionStatus = 'online' | 'syncing' | 'offline';
@@ -73,22 +108,22 @@ export type ConnectionStatus = 'online' | 'syncing' | 'offline';
  * Edits made while offline are kept in this browser and merged in when peers reconnect.
  */
 export const connectionStatus = (s: SyncState): ConnectionStatus => {
-  if (!s.browserOnline) return 'offline';
+  if (!s.browserOnline || s.needsPassword || s.syncError) return 'offline';
   if (!s.signalingUp && s.peers === 0) return 'offline';
   if (s.webrtcPeers > 0 && !s.synced) return 'syncing';
   return 'online';
 };
 
-provider.on('peers', (e: { webrtcPeers: string[]; bcPeers: string[] }) => {
+provider?.on('peers', (e: { webrtcPeers: string[]; bcPeers: string[] }) => {
   useSync.setState({ peers: e.webrtcPeers.length + e.bcPeers.length, webrtcPeers: e.webrtcPeers.length });
 });
 
 // The signalling connection and sync state come and go: just poll them.
 const poll = () => {
-  const room = provider.room as { synced?: boolean } | null;
+  const room = provider?.room as { synced?: boolean } | null;
   const next = {
     browserOnline: navigator.onLine,
-    signalingUp: provider.signalingConns.some((c) => c.connected),
+    signalingUp: !!provider?.signalingConns.some((c) => c.connected),
     synced: !!room?.synced,
   };
   const cur = useSync.getState();

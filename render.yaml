@@ -1,0 +1,17 @@
+# Render "Blueprint": deploys the signalling server. See docs/DEPLOYMENT.md.
+# (The frontend is deployed separately, e.g. on Vercel.)
+services:
+  - type: web
+    name: p2pwb-signaling
+    runtime: node
+    rootDir: signaling
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      # Your site's address(es), e.g. https://my-board.vercel.app. Leave blank until the
+      # frontend is deployed, then fill it in on the Render dashboard.
+      - key: ALLOWED_ORIGINS
+        sync: false

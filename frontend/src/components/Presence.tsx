@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { usePresence, follow, setName, setColor, PALETTE } from '../presence';
 import { useSync, connectionStatus, type ConnectionStatus } from '../sync';
 import { useUI } from '../uiStore';
+import ShareDialog from './ShareDialog';
 
 const LABEL: Record<ConnectionStatus, string> = {
   online: 'Online',
@@ -19,29 +20,18 @@ export default function Presence() {
   const peerCount = useSync((s) => s.peers);
   const followId = useUI((s) => s.followId);
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const followed = peers.find((p) => p.id === followId);
 
   const statusTitle =
     status === 'offline'
-      ? 'Offline: not connected to the signalling server and no one else is connected. Your edits are saved in this browser and merge in when you reconnect (is `npm run signal` running?).'
+      ? 'Offline: not connected to the signalling server and no one else is connected. Your edits are saved in this browser and merge in when you reconnect (is the signalling server running and VITE_SIGNALING pointing at it?).'
       : status === 'syncing'
         ? 'Syncing the board with the people connected to you…'
         : peerCount > 0
           ? 'Online and in sync.'
           : 'Online. Share the link so others can join.';
-
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(location.href);
-    } catch {
-      window.prompt('Copy this link to share the board:', location.href); // e.g. http on a LAN address
-      return;
-    }
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
-  };
 
   return (
     <div className="presence">
@@ -54,6 +44,8 @@ export default function Presence() {
           </button>
         </div>
       )}
+
+      {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
 
       {open && (
         <div
@@ -125,7 +117,10 @@ export default function Presence() {
           title="Who's online"
           aria-label={`Who's online: you and ${peers.length} other${peers.length === 1 ? '' : 's'}`}
           aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            setOpen((o) => !o);
+            setShareOpen(false);
+          }}
         >
           <span className="avatar" style={{ background: me.color }}>
             {initial(me.name)}
@@ -138,8 +133,16 @@ export default function Presence() {
           {peers.length > 4 && <span className="avatar more">+{peers.length - 4}</span>}
         </button>
 
-        <button className="share-btn" title="Copy this board's link to share it" onClick={copyLink}>
-          {copied ? 'Copied ✓' : '🔗 Share'}
+        <button
+          className="share-btn"
+          title="Share this board"
+          aria-expanded={shareOpen}
+          onClick={() => {
+            setShareOpen((o) => !o);
+            setOpen(false);
+          }}
+        >
+          🔗 Share
         </button>
       </div>
     </div>
