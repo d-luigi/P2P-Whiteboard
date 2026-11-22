@@ -25,6 +25,11 @@ export function sanitizeShape(raw: unknown): Shape | null {
 
   switch (s.type) {
     case 'rect':
+      if (s.media !== undefined && (!str(s.media, 2_800_000) || !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(s.media))) return null;
+      if (s.note !== undefined && !str(s.note, MAX_TEXT)) return null;
+      return num(s.width) && num(s.height) && s.width >= 0 && s.height >= 0 && str(s.fill, 64)
+        ? (base as unknown as Shape)
+        : null;
     case 'ellipse':
       return num(s.width) && num(s.height) && s.width >= 0 && s.height >= 0 && str(s.fill, 64)
         ? (base as unknown as Shape)

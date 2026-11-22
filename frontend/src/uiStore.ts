@@ -127,13 +127,13 @@ export const useUI = create<UIState>((set, get) => ({
   followId: null,
   view: loadView(), // last position on this board, or the origin (0, 0) if none saved
 
-  // Only the two selection tools keep a selection alive.
+  // Selection and movement tools keep a selection alive.
   setTool: (tool) => {
     // A view-only tab can look around and point, nothing else.
     if (readOnly && tool !== 'hand' && tool !== 'laser') return;
     set((s) => ({
       tool,
-      selectedIds: tool === 'select' || tool === 'marquee' ? s.selectedIds : [],
+      selectedIds: tool === 'select' || tool === 'marquee' || tool === 'move' ? s.selectedIds : [],
     }));
   },
 
