@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
 import { boardId, newBoard, readOnly } from '../board';
@@ -31,6 +31,21 @@ const MARQUEE_MODES: { id: MarqueeMode; label: string; title: string }[] = [
 
 const STROKE_SIZES = [2, 4, 8, 14, 24]; // px, for marker, lines and shape outlines
 const ERASER_SIZES = [12, 24, 48, 96]; // px diameter
+
+// Phones: narrow screens, or a phone held sideways (touch + very short viewport).
+const MOBILE_QUERY = '(max-width: 640px), (pointer: coarse) and (max-height: 480px)';
+
+function useIsMobile() {
+  return useSyncExternalStore(
+    (notify) => {
+      const mq = window.matchMedia(MOBILE_QUERY);
+      mq.addEventListener('change', notify);
+      return () => mq.removeEventListener('change', notify);
+    },
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
+}
 
 export default function Toolbar() {
   const {
@@ -89,44 +104,30 @@ export default function Toolbar() {
   const zoomCentre = (factor: number) =>
     zoomAt(window.innerWidth / 2, window.innerHeight / 2, factor);
 
-  return (
-    <div className={`toolbar ${readOnly ? 'readonly' : ''}`} role="toolbar" aria-label="Whiteboard tools">
-      <div className="group">
-        {(readOnly ? TOOLS.filter((t) => t.id === 'hand' || t.id === 'laser') : TOOLS).map((t) => (
-          <button
-            key={t.id}
-            className={`btn ${tool === t.id ? 'active' : ''}`}
-            title={`${t.label} (${t.key})`}
-            aria-label={t.label}
-            aria-pressed={tool === t.id}
-            onClick={() => setTool(t.id)}
-          >
-            {t.icon}
-          </button>
-        ))}
-      </div>
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!isMobile) setMenuOpen(false);
+  }, [isMobile]);
 
-      <div className="group edit-only">
-        <button
-          className="btn"
-          title="Undo (Ctrl+Z)"
-          aria-label="Undo"
-          disabled={!canUndo}
-          onClick={undo}
-        >
-          ↶
-        </button>
-        <button
-          className="btn"
-          title="Redo (Ctrl+Shift+Z)"
-          aria-label="Redo"
-          disabled={!canRedo}
-          onClick={redo}
-        >
-          ↷
-        </button>
-      </div>
+  const visibleTools = readOnly ? TOOLS.filter((t) => t.id === 'hand' || t.id === 'laser') : TOOLS;
+  const currentTool = TOOLS.find((t) => t.id === tool) ?? TOOLS[0];
 
+  /* ---------- pieces shared by the desktop toolbar and the phone dropdown ---------- */
+
+  const undoRedo = (
+    <div className="group edit-only">
+      <button className="btn" title="Undo (Ctrl+Z)" aria-label="Undo" disabled={!canUndo} onClick={undo}>
+        ↶
+      </button>
+      <button className="btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled={!canRedo} onClick={redo}>
+        ↷
+      </button>
+    </div>
+  );
+
+  const modeGroups = (
+    <>
       {tool === 'marquee' && (
         <div className="group" role="group" aria-label="Selection mode">
           {MARQUEE_MODES.map((m) => (
@@ -142,7 +143,6 @@ export default function Toolbar() {
           ))}
         </div>
       )}
-
       {isEraser && (
         <div className="group" role="group" aria-label="Eraser mode">
           {ERASER_MODES.map((m) => (
@@ -158,63 +158,241 @@ export default function Toolbar() {
           ))}
         </div>
       )}
+    </>
+  );
 
-      <div className="group edit-only" role="group" aria-label={isEraser ? 'Eraser size' : 'Stroke size'}>
-        {sizes.map((s) => (
-          <button
-            key={s}
-            className={`btn ${currentSize === s ? 'active' : ''}`}
-            title={`${isEraser ? 'Eraser' : 'Stroke'} size ${s}px`}
-            aria-label={`${s} pixels`}
-            aria-pressed={currentSize === s}
-            onClick={() => (isEraser ? setEraserSize(s) : setStyle({ strokeWidth: s }))}
-          >
-            <span
-              className={isEraser ? 'dot ring' : 'dot'}
-              style={{ width: dotSize(s), height: dotSize(s) }}
+  const sizeGroup = (
+    <div className="group edit-only" role="group" aria-label={isEraser ? 'Eraser size' : 'Stroke size'}>
+      {sizes.map((s) => (
+        <button
+          key={s}
+          className={`btn ${currentSize === s ? 'active' : ''}`}
+          title={`${isEraser ? 'Eraser' : 'Stroke'} size ${s}px`}
+          aria-label={`${s} pixels`}
+          aria-pressed={currentSize === s}
+          onClick={() => (isEraser ? setEraserSize(s) : setStyle({ strokeWidth: s }))}
+        >
+          <span className={isEraser ? 'dot ring' : 'dot'} style={{ width: dotSize(s), height: dotSize(s) }} />
+        </button>
+      ))}
+    </div>
+  );
+
+  const colorGroup = (
+    <div className="group edit-only">
+      <label className="field" title="Stroke colour">
+        Stroke
+        <input type="color" value={style.stroke} onChange={(e) => setStyle({ stroke: e.target.value })} />
+      </label>
+      <label className="field" title="Fill colour">
+        <input
+          type="checkbox"
+          checked={filled}
+          onChange={(e) => setStyle({ fill: e.target.checked ? fillColor : 'transparent' })}
+        />
+        Fill
+        <input
+          type="color"
+          value={fillColor}
+          onChange={(e) => {
+            setFillColor(e.target.value);
+            if (filled) setStyle({ fill: e.target.value });
+          }}
+        />
+      </label>
+    </div>
+  );
+
+  const deleteButton = (
+    <button
+      className="btn"
+      title="Delete selected (Del)"
+      aria-label="Delete selected"
+      disabled={selectedIds.length === 0}
+      onClick={deleteSelected}
+    >
+      🗑
+    </button>
+  );
+
+  const gotoGroup = (
+    <div className="group goto">
+      <button className="btn" title="Back to the centre (0, 0) (Home)" aria-label="Back to centre" onClick={goHome}>
+        ⌂
+      </button>
+      <button
+        className={`btn wide coords ${goOpen ? 'active' : ''}`}
+        title="Go to coordinates"
+        aria-label="Go to coordinates"
+        aria-expanded={goOpen}
+        onClick={toggleGo}
+      >
+        {cx}, {cy}
+      </button>
+      {goOpen && (
+        <form className="goto-pop" onSubmit={submitGo} onKeyDown={(e) => e.key === 'Escape' && setGoOpen(false)}>
+          <label className="field">
+            X
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              value={gx}
+              onChange={(e) => setGx(e.target.value)}
+              onFocus={(e) => e.target.select()}
             />
+          </label>
+          <label className="field">
+            Y
+            <input
+              type="text"
+              inputMode="decimal"
+              value={gy}
+              onChange={(e) => setGy(e.target.value)}
+              onFocus={(e) => e.target.select()}
+            />
+          </label>
+          <button type="submit" className="btn wide go">
+            Go
+          </button>
+        </form>
+      )}
+    </div>
+  );
+
+  const zoomGroup = (
+    <div className="group">
+      <button className="btn" title="Zoom out (Ctrl -)" aria-label="Zoom out" onClick={() => zoomCentre(1 / 1.2)}>
+        −
+      </button>
+      <button className="btn wide" title="Reset zoom (Ctrl 0)" onClick={resetView}>
+        {Math.round(view.scale * 100)}%
+      </button>
+      <button className="btn" title="Zoom in (Ctrl +)" aria-label="Zoom in" onClick={() => zoomCentre(1.2)}>
+        +
+      </button>
+    </div>
+  );
+
+  /* ---------- phone: one compact bar + a dropdown with everything else ---------- */
+
+  if (isMobile) {
+    return (
+      <>
+        {menuOpen && <div className="dd-backdrop" onPointerDown={() => setMenuOpen(false)} />}
+        <div
+          className={`toolbar compact ${readOnly ? 'readonly' : ''}`}
+          role="toolbar"
+          aria-label="Whiteboard tools"
+          onKeyDown={(e) => e.key === 'Escape' && setMenuOpen(false)}
+        >
+          <button
+            className={`btn menu-toggle ${menuOpen ? 'active' : ''}`}
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            aria-haspopup="true"
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <span aria-hidden="true">{currentTool.icon}</span>
+            <span className="menu-label">{currentTool.label.split(' (')[0]}</span>
+            <span className="caret" aria-hidden="true">
+              {menuOpen ? '▴' : '▾'}
+            </span>
+          </button>
+          {undoRedo}
+
+          {menuOpen && (
+            <div className="dropdown" role="menu" aria-label="Whiteboard menu">
+              <section className="dd-section">
+                <h3 className="dd-title">Tools</h3>
+                <div className="tool-grid">
+                  {visibleTools.map((t) => (
+                    <button
+                      key={t.id}
+                      className={`btn tool-tile ${tool === t.id ? 'active' : ''}`}
+                      aria-pressed={tool === t.id}
+                      onClick={() => {
+                        setTool(t.id);
+                        setMenuOpen(false); // pick a tool, then draw
+                      }}
+                    >
+                      <span className="tile-icon" aria-hidden="true">
+                        {t.icon}
+                      </span>
+                      {t.label.split(' (')[0]}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="dd-section edit-only">
+                <h3 className="dd-title">{isEraser ? 'Eraser' : 'Size and colour'}</h3>
+                {modeGroups}
+                {sizeGroup}
+                {!isEraser && colorGroup}
+              </section>
+
+              <section className="dd-section edit-only">
+                <h3 className="dd-title">Selection</h3>
+                <div className="group">
+                  {deleteButton}
+                  <span className="dd-hint">{selectedIds.length === 0 ? 'Nothing selected' : `${selectedIds.length} selected`}</span>
+                </div>
+              </section>
+
+              <section className="dd-section">
+                <h3 className="dd-title">
+                  Board <span className="board-id">{boardId.slice(0, 6)}</span>
+                </h3>
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    newBoard();
+                  }}
+                >
+                  ＋ New board
+                </button>
+                <BoardMenu inline onDone={() => setMenuOpen(false)} />
+              </section>
+
+              <section className="dd-section">
+                <h3 className="dd-title">View</h3>
+                {gotoGroup}
+                {zoomGroup}
+              </section>
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  /* ---------- desktop: the full toolbar, unchanged ---------- */
+
+  return (
+    <div className={`toolbar ${readOnly ? 'readonly' : ''}`} role="toolbar" aria-label="Whiteboard tools">
+      <div className="group">
+        {visibleTools.map((t) => (
+          <button
+            key={t.id}
+            className={`btn ${tool === t.id ? 'active' : ''}`}
+            title={`${t.label} (${t.key})`}
+            aria-label={t.label}
+            aria-pressed={tool === t.id}
+            onClick={() => setTool(t.id)}
+          >
+            {t.icon}
           </button>
         ))}
       </div>
 
-      <div className="group edit-only">
-        <label className="field" title="Stroke colour">
-          Stroke
-          <input
-            type="color"
-            value={style.stroke}
-            onChange={(e) => setStyle({ stroke: e.target.value })}
-          />
-        </label>
-        <label className="field" title="Fill colour">
-          <input
-            type="checkbox"
-            checked={filled}
-            onChange={(e) => setStyle({ fill: e.target.checked ? fillColor : 'transparent' })}
-          />
-          Fill
-          <input
-            type="color"
-            value={fillColor}
-            onChange={(e) => {
-              setFillColor(e.target.value);
-              if (filled) setStyle({ fill: e.target.value });
-            }}
-          />
-        </label>
-      </div>
+      {undoRedo}
+      {modeGroups}
+      {sizeGroup}
+      {colorGroup}
 
-      <div className="group edit-only">
-        <button
-          className="btn"
-          title="Delete selected (Del)"
-          aria-label="Delete selected"
-          disabled={selectedIds.length === 0}
-          onClick={deleteSelected}
-        >
-          🗑
-        </button>
-      </div>
+      <div className="group edit-only">{deleteButton}</div>
 
       <div className="group">
         <span className="board-id" title={`Board ${boardId}. Saved in this browser; bookmark this link to return.`}>
@@ -231,69 +409,8 @@ export default function Toolbar() {
         <BoardMenu />
       </div>
 
-      <div className="group goto">
-        <button
-          className="btn"
-          title="Back to the centre (0, 0) (Home)"
-          aria-label="Back to centre"
-          onClick={goHome}
-        >
-          ⌂
-        </button>
-        <button
-          className={`btn wide coords ${goOpen ? 'active' : ''}`}
-          title="Go to coordinates"
-          aria-label="Go to coordinates"
-          aria-expanded={goOpen}
-          onClick={toggleGo}
-        >
-          {cx}, {cy}
-        </button>
-        {goOpen && (
-          <form
-            className="goto-pop"
-            onSubmit={submitGo}
-            onKeyDown={(e) => e.key === 'Escape' && setGoOpen(false)}
-          >
-            <label className="field">
-              X
-              <input
-                type="text"
-                inputMode="decimal"
-                autoFocus
-                value={gx}
-                onChange={(e) => setGx(e.target.value)}
-                onFocus={(e) => e.target.select()}
-              />
-            </label>
-            <label className="field">
-              Y
-              <input
-                type="text"
-                inputMode="decimal"
-                value={gy}
-                onChange={(e) => setGy(e.target.value)}
-                onFocus={(e) => e.target.select()}
-              />
-            </label>
-            <button type="submit" className="btn wide go">
-              Go
-            </button>
-          </form>
-        )}
-      </div>
-
-      <div className="group">
-        <button className="btn" title="Zoom out (Ctrl -)" aria-label="Zoom out" onClick={() => zoomCentre(1 / 1.2)}>
-          −
-        </button>
-        <button className="btn wide" title="Reset zoom (Ctrl 0)" onClick={resetView}>
-          {Math.round(view.scale * 100)}%
-        </button>
-        <button className="btn" title="Zoom in (Ctrl +)" aria-label="Zoom in" onClick={() => zoomCentre(1.2)}>
-          +
-        </button>
-      </div>
+      {gotoGroup}
+      {zoomGroup}
     </div>
   );
 }

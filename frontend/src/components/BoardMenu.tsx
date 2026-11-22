@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { boardStats, compactBoard, type BoardStats } from '../docStore';
 import { downloadBackup, importBackupFile } from '../backup';
 import { readOnly } from '../board';
@@ -7,22 +7,32 @@ import { toast } from '../toast';
 
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-/** ⋯ menu: backup, import, compaction, keyboard shortcuts. */
-export default function BoardMenu() {
+/**
+ * ⋯ menu: backup, import, compaction, keyboard shortcuts.
+ * `inline` renders the same items as a plain list (used inside the phone dropdown),
+ * with no ⋯ button and no popover of its own.
+ */
+export default function BoardMenu({ inline = false, onDone }: { inline?: boolean; onDone?: () => void }) {
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState<BoardStats | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const setHelp = useUI((s) => s.setHelp);
 
-  const toggle = () => {
-    if (!open) {
-      try {
-        setStats(boardStats());
-      } catch {
-        setStats(null);
-      }
+  const loadStats = () => {
+    try {
+      setStats(boardStats());
+    } catch {
+      setStats(null);
     }
+  };
+
+  useEffect(() => {
+    if (inline) loadStats();
+  }, [inline]);
+
+  const toggle = () => {
+    if (!open) loadStats();
     setOpen((o) => !o);
   };
 
@@ -37,20 +47,28 @@ export default function BoardMenu() {
     }
   };
 
+  const shown = inline || open;
+
   return (
-    <div className="boardmenu">
-      <button
-        className="btn"
-        title="Board menu: backup, import, shortcuts"
-        aria-label="Board menu"
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={toggle}
-      >
-        ⋯
-      </button>
-      {open && (
-        <div className="goto-pop menu" role="menu" onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+    <div className={inline ? 'boardmenu inline' : 'boardmenu'}>
+      {!inline && (
+        <button
+          className="btn"
+          title="Board menu: backup, import, shortcuts"
+          aria-label="Board menu"
+          aria-expanded={open}
+          aria-haspopup="true"
+          onClick={toggle}
+        >
+          ⋯
+        </button>
+      )}
+      {shown && (
+        <div
+          className={inline ? 'menu-list' : 'goto-pop menu'}
+          role="menu"
+          onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+        >
           {stats && (
             <div className="menu-stat" role="presentation">
               {stats.shapes} {stats.shapes === 1 ? 'shape' : 'shapes'} · {kb(stats.bytes)} saved
@@ -82,16 +100,18 @@ export default function BoardMenu() {
               </button>
             </>
           )}
-          <button
-            role="menuitem"
-            className="menu-item"
-            onClick={() => {
-              setOpen(false);
-              setHelp(true);
-            }}
-          >
-            Keyboard shortcuts (?)
-          </button>
+          {!inline && (
+            <button
+              role="menuitem"
+              className="menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelp(true);
+              }}
+            >
+              Keyboard shortcuts (?)
+            </button>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -105,6 +125,7 @@ export default function BoardMenu() {
                 const n = await importBackupFile(file);
                 toast(`Imported ${n} ${n === 1 ? 'shape' : 'shapes'}. Ctrl+Z undoes it.`);
                 setOpen(false);
+                onDone?.();
               }, 'That file could not be imported.');
             }}
           />
