@@ -1,48 +1,42 @@
 # P2P Whiteboard
 
-An installable, peer-to-peer collaborative whiteboard for drawing, planning, and sharing ideas in real time. Open a board in the browser, share its short room code, and collaborate without sending drawings through a central database.
+<div align="center">
+  <img src="brand/p2p-lockup.svg" alt="P2P Whiteboard" width="640" />
 
-![P2P Whiteboard](frontend/public/icons/icon-512.png)
+  <h2>Draw together. Think together.</h2>
+  <p>A lightweight peer-to-peer whiteboard for planning, sketching, and sharing ideas in real time.</p>
 
-## Features
+  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/license-MIT-2563EB.svg" alt="MIT License"></a>
+  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/transport-WebRTC-111827.svg" alt="WebRTC"></a>
+  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/mobile-PWA-2563EB.svg" alt="Progressive Web App"></a>
+</div>
 
-- Draw with pen, lines, arrows, rectangles, ellipses, and text.
+## What it does
+
+P2P Whiteboard opens an infinite canvas directly in the browser. Create a board, share its six-character room code, and collaborate live without routing drawings through a central database.
+
+- Draw with pens, shapes, arrows, and editable text.
 - Select, move, resize, duplicate, reorder, and erase items.
-- Add images, animated GIFs, editable sticky notes, and board templates.
-- Pan and zoom an infinite canvas, with saved camera position and undo history.
-- Collaborate through WebRTC with live cursors, presence, follow mode, and a laser pointer.
-- Join boards with six-character room codes. Password-protected boards prompt for their password.
-- Share edit links, view-only links, or password-protected boards.
-- Keep boards offline in IndexedDB and merge changes when the connection returns.
-- Optionally sync board lists, ownership, display names, and colours with Supabase accounts.
-- Install the app on desktop or mobile as a PWA.
+- Add images, GIFs, sticky notes, and board templates from one insert menu.
+- Collaborate with live cursors, presence, follow mode, and a laser pointer.
+- Use password-protected boards, view-only links, and short join codes.
+- Keep working offline with local board storage and undo history.
+- Install it on desktop or mobile as a PWA.
 
 > [!NOTE]
-> Drawings remain in browsers and are synchronized peer to peer. The short-code directory temporarily stores a board ID and its access flags so a six-character code can resolve to the correct board.
+> Drawings stay in browsers and synchronize peer to peer. The signaling server only helps peers discover each other and resolve temporary room codes.
 
-## Project structure
-
-```text
-.
-├── frontend/                 React, Vite, Konva, and Yjs web app
-├── signaling/                WebSocket signaling and short-code directory
-├── supabase/schema.sql       Optional account tables
-├── docs/                     Deployment, accounts, offline, and room-code guides
-├── render.yaml               Render deployment blueprint for signaling
-└── package.json              Root convenience scripts
-```
-
-## Run locally
+## Try it locally
 
 Requires Node.js 18 or newer.
 
 ```bash
 npm run setup
-npm run signal   # terminal 1, ws://localhost:4444
-npm run dev      # terminal 2, http://localhost:5173
+npm run signal   # terminal 1 — ws://localhost:4444
+npm run dev      # terminal 2 — http://localhost:5173
 ```
 
-Open the app in two browsers. Use **Join board** and enter the six-character code shown in the host toolbar.
+Open the app in two browsers. Choose **Join board** and enter the six-character code shown in the host toolbar.
 
 | Command | Purpose |
 | --- | --- |
@@ -51,37 +45,40 @@ Open the app in two browsers. Use **Join board** and enter the six-character cod
 | `npm run signal` | Start the WebSocket signaling server |
 | `npm run build` | Type-check and build the frontend |
 | `npm run test:signal` | Run signaling and room-code tests |
-| `npm run test:frontend` | Run frontend account, registry, and service-worker tests |
+| `npm run test:frontend` | Run frontend tests |
+
+## Project layout
+
+```text
+frontend/       React, Vite, Konva, and Yjs whiteboard app
+signaling/      WebSocket signaling and short-code directory
+supabase/       Optional account schema
+docs/           Deployment, offline, account, and room-code guides
+brand/          Logo assets and usage guide
+```
 
 ## Configuration
 
-Set frontend variables in `frontend/.env.local` or in your hosting provider. See [`frontend/.env.example`](frontend/.env.example).
+Copy `frontend/.env.example` to `frontend/.env.local` when you need custom infrastructure.
 
 | Variable | Purpose |
 | --- | --- |
-| `VITE_SIGNALING` | One or more WebSocket signaling server URLs |
-| `VITE_TURN_URL` | Optional TURN server URLs for restrictive networks |
+| `VITE_SIGNALING` | WebSocket signaling server URL(s) |
+| `VITE_TURN_URL` | Optional TURN server for restrictive networks |
 | `VITE_TURN_USER` | TURN username |
 | `VITE_TURN_CREDENTIAL` | TURN credential |
 | `VITE_SUPABASE_URL` | Optional Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Optional Supabase publishable key |
 
-Configure the signaling server with `PORT` and `ALLOWED_ORIGINS`. Deploy the updated frontend and signaling server together when using short room codes. See [`docs/ROOM_CODES.md`](docs/ROOM_CODES.md).
+Read [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/OFFLINE.md`](docs/OFFLINE.md), and [`docs/ROOM_CODES.md`](docs/ROOM_CODES.md) for deployment and infrastructure details.
 
-## Deployment
+## Security notes
 
-Follow [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for Vercel, Render, TURN, and account setup. The offline and installable app behavior is documented in [`docs/OFFLINE.md`](docs/OFFLINE.md). Optional account storage is described in [`docs/ACCOUNTS.md`](docs/ACCOUNTS.md).
+- Treat board links and room codes as secrets.
+- Password protection gates live peer connections but does not encrypt a browser's local copy.
+- View-only mode is a client-side editing guard, not server authorization.
+- Short codes expire after 24 hours of inactivity and live in signaling-server memory.
 
-## Security model
+## Brand
 
-- A board link or room code grants access to that board. Treat it as a secret.
-- Password protection gates live peer connections. It does not encrypt the browser's local copy.
-- View-only mode hides editing controls and prevents accidental edits in that tab. It is not server-enforced authorization.
-- Incoming peer data is validated before rendering.
-- Short codes expire after 24 hours of inactivity and are kept in signaling-server memory.
-
-## Limitations
-
-- Networks that block direct WebRTC connections may require TURN.
-- Restarting the signaling server clears its in-memory room-code directory.
-- Compacting a board clears its undo history.
+The horizontal wordmark and connected-tiles mark are documented in [`brand/README.md`](brand/README.md).
