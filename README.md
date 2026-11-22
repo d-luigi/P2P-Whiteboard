@@ -13,9 +13,11 @@
 
 ## Demo video
 
-[![Watch the P2P Whiteboard demo](brag-output-2026-11-22-151300/brag.jpg)](brag-output-2026-11-22-151300/brag.mp4)
+<video controls width="100%" poster="brag-output-2026-11-22-151300/brag.jpg">
+  <source src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4" type="video/mp4">
+</video>
 
-[Watch or download the 21-second demo](brag-output-2026-11-22-151300/brag.mp4). The board content and room code are fictional examples. [Music and sound credits](brag-output-2026-11-22-151300/music-credit.txt).
+The 21-second demo plays inline above. The board content and room code are fictional examples. [Music and sound credits](brag-output-2026-11-22-151300/music-credit.txt).
 
 ## What it does
 
