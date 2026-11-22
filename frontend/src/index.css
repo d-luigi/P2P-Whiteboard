@@ -1070,3 +1070,8 @@ body,
     top: calc(64px + env(safe-area-inset-top, 0px));
   }
 }
+
+.boards-btn {
+  height: 30px;
+  padding: 0 8px;
+}

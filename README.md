@@ -1,7 +1,7 @@
 # P2P Whiteboard
 
-A collaborative whiteboard that runs in the browser with **no account and no server storing your
-drawings**. Boards are shared by link; people connect directly to each other (WebRTC) and stay in
+A collaborative whiteboard that runs in the browser with **no server storing your drawings**, and no
+account needed (an optional account keeps your list of boards on all your devices). Boards are shared by link; people connect directly to each other (WebRTC) and stay in
 sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edits made offline.
 
 ## What it does
@@ -15,6 +15,8 @@ sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edit
 - Live collaboration: cursors with names and colours, who's online, connection status, follow
   someone's view, laser pointer
 - Sharing: edit link, view-only link, optional password
+- My boards: every board you open is listed (rename, reopen); optional account (email + password) syncs
+  the list, your name and colour, and your board ownership across devices. Guests (no account) work as before
 - Backup: download / import a board file; automatic compaction of large boards
 - Touch screens (pinch to zoom, two-finger pan), keyboard shortcuts (`?`), screen-reader support
 
@@ -24,8 +26,11 @@ sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edit
 .
 ├── frontend/        The web app (React + Vite + Konva + Yjs). Deploy to Vercel / any static host.
 ├── signaling/       Tiny WebSocket server that lets browsers find each other. Deploy to Render / Fly / etc.
+├── supabase/
+│   └── schema.sql      Tables for the optional accounts (run once in Supabase)
 ├── docs/
-│   └── DEPLOYMENT.md   Step-by-step: Vercel (frontend) + Render (signalling) + optional TURN
+│   ├── DEPLOYMENT.md   Step-by-step: Vercel (frontend) + Render (signalling) + optional TURN
+│   └── ACCOUNTS.md     Optional accounts: what is stored, Supabase setup, behaviour
 ├── render.yaml      One-click Render blueprint for signaling/
 └── package.json     Convenience scripts that call into the folders above
 ```
@@ -54,6 +59,7 @@ green status dot and see each other's cursors.
 | `npm run signal` | Start the signalling server |
 | `npm run build` | Type-check and build the web app into `frontend/dist` |
 | `npm run test:signal` | Run the signalling server's tests |
+| `npm run test:frontend` | Run the account/list tests (needs Node 22.18+) |
 
 You can also `cd frontend` or `cd signaling` and use their own `npm run …` scripts directly.
 
@@ -66,6 +72,7 @@ Frontend (`frontend/.env.local`, or your host's environment variables; see
 | --- | --- |
 | `VITE_SIGNALING` | Signalling server URL(s), e.g. `wss://p2pwb-signaling.onrender.com`. Defaults to port 4444 on the page's own host. |
 | `VITE_TURN_URL`, `VITE_TURN_USER`, `VITE_TURN_CREDENTIAL` | Optional TURN relay for networks where a direct connection is impossible |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | Optional: turns on accounts. See [docs/ACCOUNTS.md](docs/ACCOUNTS.md) |
 
 Signalling server: `PORT` (default 4444) and `ALLOWED_ORIGINS` (which websites may connect).
 
@@ -79,6 +86,9 @@ Signalling server: `PORT` (default 4444) and `ALLOWED_ORIGINS` (which websites m
 - **Passwords are real access control for live sharing**: without it a browser can't connect to the
   board's peers. They need HTTPS or localhost, and don't encrypt the copy saved in a browser.
 - Data from other peers is validated before it is drawn.
+- **Accounts trade some of this away, only for people who sign in.** The account stores the IDs of your
+  boards and the owner keys of boards you own, so whoever runs the Supabase project could open them.
+  Guests send nothing to any server. Details in [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
 
 ## Deploying
 

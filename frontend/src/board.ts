@@ -155,6 +155,10 @@ export const clearCreatedFlag = () => store.remove(CREATED_PREFIX + boardId);
 /** The owner key this browser holds for the board, if any. */
 export const getOwnerKey = () => store.get(OWNER_PREFIX + boardId);
 export const setOwnerKey = (key: string) => store.set(OWNER_PREFIX + boardId, key);
+/** The same for any board (the list of my boards restores keys from the account: registry.ts). */
+export const getOwnerKeyFor = (id: string) => store.get(OWNER_PREFIX + id);
+export const setOwnerKeyFor = (id: string, key: string) => store.set(OWNER_PREFIX + id, key);
+export const removeOwnerKeyFor = (id: string) => store.remove(OWNER_PREFIX + id);
 
 /** The owner hash this browser first saw for the board (trust on first use). */
 export const getPinnedHash = () => store.get(PIN_PREFIX + boardId);

@@ -5,6 +5,7 @@ import { readOnly } from '../board';
 import { useUI } from '../uiStore';
 import { toast } from '../toast';
 import { claimOwnership, useOwner } from '../owner';
+import { setPanelOpen } from '../account';
 
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -85,6 +86,16 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
           <div className="menu-stat" role="presentation">
             {isOwner ? '👑 You are an owner of this board' : ownerHash ? 'This board has an owner' : 'This board has no owner yet'}
           </div>
+          <button
+            role="menuitem"
+            className="menu-item"
+            onClick={() => {
+              close();
+              setPanelOpen(true);
+            }}
+          >
+            My boards &amp; account…
+          </button>
           <button
             role="menuitem"
             className="menu-item"

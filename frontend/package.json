@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test --test-timeout=15000 tests/*.test.ts"
   },
   "dependencies": {
     "konva": "^9.3.14",

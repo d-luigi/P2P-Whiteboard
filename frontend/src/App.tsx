@@ -7,6 +7,7 @@ import PasswordGate from './components/PasswordGate';
 import Shortcuts from './components/Shortcuts';
 import EmptyState from './components/EmptyState';
 import DeleteDialog from './components/DeleteDialog';
+import AuthDialog from './components/AuthDialog';
 import DeletedScreen from './components/DeletedScreen';
 import { useOwner } from './owner';
 import A11y from './components/A11y';
@@ -141,6 +142,7 @@ export default function App() {
       <PasswordGate />
       <Shortcuts />
       <DeleteDialog />
+      <AuthDialog />
       <Toasts />
       <A11y />
       {readOnly && (

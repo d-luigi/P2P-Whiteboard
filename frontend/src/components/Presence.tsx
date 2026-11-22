@@ -3,6 +3,8 @@ import { usePresence, follow, setName, setColor, PALETTE } from '../presence';
 import { useSync, connectionStatus, type ConnectionStatus } from '../sync';
 import { useUI } from '../uiStore';
 import ShareDialog from './ShareDialog';
+import AccountPanel from './AccountPanel';
+import { setPanelOpen, useAccount } from '../account';
 
 const LABEL: Record<ConnectionStatus, string> = {
   online: 'Online',
@@ -21,6 +23,8 @@ export default function Presence() {
   const followId = useUI((s) => s.followId);
   const [open, setOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const accountOpen = useAccount((s) => s.panelOpen);
+  const signedIn = useAccount((s) => !!s.session);
 
   const followed = peers.find((p) => p.id === followId);
 
@@ -46,6 +50,7 @@ export default function Presence() {
       )}
 
       {shareOpen && <ShareDialog onClose={() => setShareOpen(false)} />}
+      {accountOpen && <AccountPanel onClose={() => setPanelOpen(false)} />}
 
       {open && (
         <div
@@ -120,6 +125,7 @@ export default function Presence() {
           onClick={() => {
             setOpen((o) => !o);
             setShareOpen(false);
+            setPanelOpen(false);
           }}
         >
           <span className="avatar" style={{ background: me.color }}>
@@ -134,12 +140,27 @@ export default function Presence() {
         </button>
 
         <button
+          className="chip-btn boards-btn"
+          title={signedIn ? 'My boards and account' : 'My boards (using as a guest)'}
+          aria-label="My boards and account"
+          aria-expanded={accountOpen}
+          onClick={() => {
+            setPanelOpen(!accountOpen);
+            setOpen(false);
+            setShareOpen(false);
+          }}
+        >
+          {signedIn ? '👤' : '📋'}
+        </button>
+
+        <button
           className="share-btn"
           title="Share this board"
           aria-expanded={shareOpen}
           onClick={() => {
             setShareOpen((o) => !o);
             setOpen(false);
+            setPanelOpen(false);
           }}
         >
           🔗 Share

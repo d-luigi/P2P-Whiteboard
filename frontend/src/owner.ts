@@ -79,6 +79,9 @@ function refresh() {
   if (isValidDeletion(boardId, hash, yMeta.get('deleted'))) void finishDeletion();
 }
 
+/** Look at the ownership facts again (e.g. after the account restored this board's owner key). */
+export const recheckOwnership = () => refresh();
+
 /**
  * Become the owner of a board that has none (new boards do this automatically; older boards
  * use "Claim ownership"). Returns false if it already has an owner or this tab is view-only.

@@ -53,7 +53,7 @@ Opening the https URL in a browser should show `p2pwb signalling server: ok`.
    | Name | Value |
    | --- | --- |
    | `VITE_SIGNALING` | `wss://p2pwb-signaling.onrender.com` (your Render host) |
-   | `VITE_TURN_URL`, `VITE_TURN_USER`, `VITE_TURN_CREDENTIAL` | optional, see step 4 below |
+   | `VITE_TURN_URL`, `VITE_TURN_USER`, `VITE_TURN_CREDENTIAL` | optional, see step 5 below |
 
 5. Deploy. Changing an environment variable later needs a **redeploy** to take effect.
 
@@ -76,7 +76,13 @@ Several allowed sites can be listed, comma-separated, and `*` matches within one
 deployments, which have their own addresses). Anyone else's website is then refused. Leaving it empty
 accepts any origin.
 
-## 4. Testing on a phone, and when you need TURN
+## 4. Accounts (optional)
+
+Skip this and everyone is a guest. To enable accounts, follow [ACCOUNTS.md](ACCOUNTS.md): a free Supabase
+project, one SQL script, and two more Vercel environment variables (`VITE_SUPABASE_URL`,
+`VITE_SUPABASE_ANON_KEY`). The Render service is not involved.
+
+## 5. Testing on a phone, and when you need TURN
 
 - **Phone and laptop on the same Wi-Fi:** works with no extras.
 - **Phone on mobile data, laptop elsewhere:** often fails, because many mobile networks block direct
@@ -103,5 +109,5 @@ but issues short-lived credentials from its API, which needs a small server to h
    with `wss://` on an https site), that the Render service is awake, and `ALLOWED_ORIGINS`.
 2. Green, but you don't see the other person: both must open the **same link**, including the part
    after `#`. If the board is password protected, both need the password.
-3. Works on Wi-Fi but not on mobile data: add TURN (step 4).
+3. Works on Wi-Fi but not on mobile data: add TURN (step 5).
 4. Browser console: look for `WebSocket connection to 'wss://…' failed`.
