@@ -4,7 +4,8 @@ import type Konva from 'konva';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
 import { distToShape, erasePartial } from '../erase';
-import { shapesInLasso, shapesInRect, unionBounds } from '../selection';
+import { shapeBounds, shapesInLasso, shapesInRect, unionBounds } from '../selection';
+import { readOnly } from '../board';
 import { viewportRect, visibleShapes } from '../visible';
 import type { LineShape, Shape } from '../types';
 import MediaContent from './MediaContent';
@@ -306,6 +307,46 @@ export default function Board() {
   const origin = useRef<Pt>({ x: 0, y: 0 });
   const lastErase = useRef<Pt>({ x: 0, y: 0 });
 
+  // Resolve the item independently of resize handles and the group-selection overlay.
+  const editableAt = (x: number, y: number) =>
+    [...Object.values(useDoc.getState().shapes)].sort((a, b) => b.z - a.z).find((s) => {
+      if (s.type !== 'text' && !(s.type === 'rect' && s.note !== undefined)) return false;
+      const b = shapeBounds(s);
+      return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+    });
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    let down: { x: number; y: number } | null = null;
+    let lastTap: { id: string; time: number } | null = null;
+    const find = (e: MouseEvent | PointerEvent) => {
+      if (readOnly || !(e.target instanceof HTMLCanvasElement)) return;
+      if (!['select', 'move', 'marquee', 'text'].includes(useUI.getState().tool)) return;
+      const v = useUI.getState().view;
+      const r = el.getBoundingClientRect();
+      return editableAt((e.clientX - r.left - v.x) / v.scale, (e.clientY - r.top - v.y) / v.scale);
+    };
+    const edit = (e: MouseEvent) => {
+      const s = find(e);
+      if (s) { e.preventDefault(); e.stopPropagation(); useUI.getState().requestEdit(s.id); }
+    };
+    const start = (e: PointerEvent) => { down = e.isPrimary ? { x: e.clientX, y: e.clientY } : null; };
+    const end = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch' || !down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || pinchRef.current) { lastTap = null; return; }
+      const s = find(e);
+      const time = performance.now();
+      if (s && lastTap?.id === s.id && time - lastTap.time < 450) {
+        useUI.getState().requestEdit(s.id); lastTap = null;
+      } else lastTap = s ? { id: s.id, time } : null;
+      down = null;
+    };
+    el.addEventListener('dblclick', edit, true);
+    el.addEventListener('pointerdown', start, true);
+    el.addEventListener('pointerup', end, true);
+    return () => { el.removeEventListener('dblclick', edit, true); el.removeEventListener('pointerdown', start, true); el.removeEventListener('pointerup', end, true); };
+  }, []);
+
   useEffect(() => {
     const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', onResize);
@@ -458,6 +499,8 @@ export default function Board() {
     if (!editRequest) return;
     const s = useDoc.getState().shapes[editRequest];
     requestEdit(null);
+    if (readOnly) return;
+    if (s) { setTool('move'); setSelected(s.id); }
     if (s?.type === 'rect' && s.note !== undefined) setNoteEditor({ id: s.id, value: s.note });
     else if (s) editText(s);
   }, [editRequest]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -571,6 +614,8 @@ export default function Board() {
     }
 
     if (tool === 'text') {
+      const existing = editableAt(pos.x, pos.y);
+      if (existing) { requestEdit(existing.id); return; }
       openEditor({ id: null, x: pos.x, y: pos.y, value: '', fontSize: 24, color: style.stroke });
       return;
     }

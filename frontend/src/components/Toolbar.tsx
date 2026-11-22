@@ -4,6 +4,7 @@ import { useUI } from '../uiStore';
 import { boardId, newBoard, readOnly } from '../board';
 import BoardMenu from './BoardMenu';
 import InsertItems from './InsertItems';
+import JoinBoard from './JoinBoard';
 import type { EraserMode, MarqueeMode, Tool } from '../types';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
@@ -361,6 +362,7 @@ export default function Toolbar() {
                   ＋ New board
                 </button>
                 <BoardMenu inline onDone={() => setMenuOpen(false)} />
+                <JoinBoard />
               </section>
 
               <section className="dd-section">
@@ -415,6 +417,7 @@ export default function Toolbar() {
           ＋
         </button>
         <BoardMenu />
+        <JoinBoard />
       </div>
 
       {gotoGroup}
