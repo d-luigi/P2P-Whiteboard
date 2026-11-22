@@ -57,6 +57,16 @@ docs/           Deployment, offline, account, and room-code guides
 brand/          Logo assets and usage guide
 ```
 
+## Tech stack
+
+- **Frontend:** React, TypeScript, Vite, and Tailwind CSS
+- **Canvas:** Konva with `react-konva`
+- **Collaboration:** WebRTC, Yjs, and `y-webrtc`
+- **Signaling:** Node.js, WebSocket, and Express
+- **Persistence:** IndexedDB for offline boards
+- **Optional accounts:** Supabase
+- **Deployment:** Vercel for the frontend and Render for signaling
+
 ## Configuration
 
 Copy `frontend/.env.example` to `frontend/.env.local` when you need custom infrastructure.
