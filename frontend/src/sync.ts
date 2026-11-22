@@ -139,5 +139,11 @@ const poll = () => {
 };
 poll();
 window.setInterval(poll, 500);
-window.addEventListener('online', poll);
+window.addEventListener('online', () => {
+  // Back on the network: reconnect to the signalling server now rather than at the next retry.
+  provider?.signalingConns.forEach((c) => {
+    if (!c.connected && !c.connecting) c.connect();
+  });
+  poll();
+});
 window.addEventListener('offline', poll);

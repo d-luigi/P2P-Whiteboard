@@ -7,6 +7,7 @@ import './index.css';
 import './sync'; // start live sync for this board
 import './registry'; // list this board under "my boards"
 import './account'; // optional account: sync that list across devices
+import './pwa'; // installable + works offline
 
 if (import.meta.env.DEV) void import('./stress'); // console helper: p2pwbStress(n)
 

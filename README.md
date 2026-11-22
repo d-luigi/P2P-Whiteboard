@@ -18,6 +18,7 @@ sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edit
 - My boards: every board you open is listed (rename, reopen); optional account (email + password) syncs
   the list, your name and colour, and your board ownership across devices. Guests (no account) work as before
 - Backup: download / import a board file; automatic compaction of large boards
+- Installable app (Windows, Android, iPhone/iPad) that opens and works with no network: [docs/OFFLINE.md](docs/OFFLINE.md)
 - Touch screens (pinch to zoom, two-finger pan), keyboard shortcuts (`?`), screen-reader support
 
 ## Repository layout
@@ -30,6 +31,7 @@ sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edit
 │   └── schema.sql      Tables for the optional accounts (run once in Supabase)
 ├── docs/
 │   ├── DEPLOYMENT.md   Step-by-step: Vercel (frontend) + Render (signalling) + optional TURN
+│   ├── OFFLINE.md      Installing as an app, what works offline, platform notes
 │   └── ACCOUNTS.md     Optional accounts: what is stored, Supabase setup, behaviour
 ├── render.yaml      One-click Render blueprint for signaling/
 └── package.json     Convenience scripts that call into the folders above
@@ -59,7 +61,7 @@ green status dot and see each other's cursors.
 | `npm run signal` | Start the signalling server |
 | `npm run build` | Type-check and build the web app into `frontend/dist` |
 | `npm run test:signal` | Run the signalling server's tests |
-| `npm run test:frontend` | Run the account/list tests (needs Node 22.18+) |
+| `npm run test:frontend` | Run the account/list/offline-worker tests (needs Node 22.18+) |
 
 You can also `cd frontend` or `cd signaling` and use their own `npm run …` scripts directly.
 

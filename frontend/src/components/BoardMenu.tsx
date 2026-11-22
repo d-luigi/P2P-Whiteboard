@@ -6,6 +6,7 @@ import { useUI } from '../uiStore';
 import { toast } from '../toast';
 import { claimOwnership, useOwner } from '../owner';
 import { setPanelOpen } from '../account';
+import { installApp, usePwa } from '../pwa';
 
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -23,6 +24,7 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
   const setDeleteDialog = useUI((s) => s.setDeleteDialog);
   const isOwner = useOwner((s) => s.isOwner);
   const ownerHash = useOwner((s) => s.ownerHash);
+  const canInstall = usePwa((s) => s.canInstall);
 
   const loadStats = () => {
     try {
@@ -121,6 +123,19 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
                 Compact board…
               </button>
             </>
+          )}
+          {canInstall && (
+            <button
+              role="menuitem"
+              className="menu-item"
+              title="Add the whiteboard to your device so it opens like an app, even offline"
+              onClick={() => {
+                close();
+                void installApp();
+              }}
+            >
+              Install app…
+            </button>
           )}
           {!inline && (
             <button
