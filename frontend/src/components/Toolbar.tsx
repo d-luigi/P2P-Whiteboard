@@ -3,10 +3,12 @@ import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
 import { boardId, newBoard, readOnly } from '../board';
 import BoardMenu from './BoardMenu';
+import InsertItems from './InsertItems';
 import type { EraserMode, MarqueeMode, Tool } from '../types';
 
 const TOOLS: { id: Tool; icon: string; label: string; key: string }[] = [
   { id: 'select', icon: '↖', label: 'Select', key: 'V' },
+  { id: 'move', icon: '✥', label: 'Move items', key: '' },
   { id: 'marquee', icon: '⬚', label: 'Selection', key: 'M' },
   { id: 'hand', icon: '✋', label: 'Pan', key: 'H' },
   { id: 'rect', icon: '▭', label: 'Rectangle', key: 'R' },
@@ -340,6 +342,11 @@ export default function Toolbar() {
                 </div>
               </section>
 
+              <section className="dd-section edit-only">
+                <h3 className="dd-title">Insert</h3>
+                <InsertItems onDone={() => setMenuOpen(false)} />
+              </section>
+
               <section className="dd-section">
                 <h3 className="dd-title">
                   Board <span className="board-id">{boardId.slice(0, 6)}</span>
@@ -377,7 +384,7 @@ export default function Toolbar() {
           <button
             key={t.id}
             className={`btn ${tool === t.id ? 'active' : ''}`}
-            title={`${t.label} (${t.key})`}
+            title={t.key ? `${t.label} (${t.key})` : `${t.label}: drag an item or selected group`}
             aria-label={t.label}
             aria-pressed={tool === t.id}
             onClick={() => setTool(t.id)}
@@ -388,6 +395,7 @@ export default function Toolbar() {
       </div>
 
       {undoRedo}
+      <InsertItems />
       {modeGroups}
       {sizeGroup}
       {colorGroup}

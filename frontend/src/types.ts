@@ -6,6 +6,7 @@ export type MarqueeMode = 'rect' | 'free';
 
 export type Tool =
   | 'select'
+  | 'move'
   | 'marquee'
   | 'hand'
   | 'rect'
@@ -28,6 +29,8 @@ interface BaseShape {
 
 export interface RectShape extends BaseShape {
   type: 'rect';
+  media?: string;
+  note?: string;
   width: number;
   height: number;
   fill: string; // 'transparent' = no fill

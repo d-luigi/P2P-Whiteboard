@@ -7,6 +7,7 @@ import { distToShape, erasePartial } from '../erase';
 import { shapesInLasso, shapesInRect, unionBounds } from '../selection';
 import { viewportRect, visibleShapes } from '../visible';
 import type { LineShape, Shape } from '../types';
+import MediaContent from './MediaContent';
 
 type Evt = Konva.KonvaEventObject<MouseEvent | TouchEvent>;
 interface Pt {
@@ -65,6 +66,29 @@ function ShapeNode({
 
   switch (shape.type) {
     case 'rect':
+      if (shape.media || shape.note !== undefined) {
+        const edit = () => {
+          if (!interactive || shape.note === undefined) return;
+          const note = window.prompt('Edit sticky note', shape.note);
+          if (note !== null) updateShape(shape.id, { note: note.slice(0, 10000) });
+        };
+        return (
+          <Group {...common} x={shape.x} y={shape.y} width={shape.width} height={shape.height}
+            onDblClick={edit} onDblTap={edit}
+            onDragEnd={(e) => updateShape(shape.id, { x: e.target.x(), y: e.target.y() })}
+            onTransformEnd={(e) => {
+              const n = e.target;
+              const width = Math.max(40, shape.width * n.scaleX());
+              const height = Math.max(40, shape.height * n.scaleY());
+              n.scaleX(1); n.scaleY(1);
+              updateShape(shape.id, { x: n.x(), y: n.y(), width, height }, 'transform');
+            }}>
+            <Rect width={shape.width} height={shape.height} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} />
+            {shape.media ? <MediaContent src={shape.media} width={shape.width} height={shape.height} /> :
+              <Text text={shape.note} x={14} y={14} width={Math.max(1, shape.width - 28)} height={Math.max(1, shape.height - 28)} fontSize={20} fill={shape.stroke} wrap="word" listening={false} />}
+          </Group>
+        );
+      }
       return (
         <Rect
           {...common}
@@ -229,7 +253,7 @@ export default function Board() {
     () => selectedIds.map((id) => shapesMap[id]).filter((s): s is Shape => !!s),
     [selectedIds, shapesMap],
   );
-  const selectish = tool === 'select' || tool === 'marquee';
+  const selectish = tool === 'select' || tool === 'marquee' || tool === 'move';
   const multi = selectedList.length > 1;
   const selected = selectedList.length === 1 ? selectedList[0] : undefined;
   // Several shapes selected: one draggable box over the whole group moves them together.
@@ -513,8 +537,8 @@ export default function Board() {
     if (tool === 'laser') return; // draws nothing; peers see it through presence.ts
     if (pinchRef.current) return; // a second finger started a pinch: not a new stroke
 
-    if (tool === 'select' || tool === 'hand') {
-      if (tool === 'select' && e.target === stage) setSelected(null);
+    if (tool === 'select' || tool === 'move' || tool === 'hand') {
+      if ((tool === 'select' || tool === 'move') && e.target === stage) setSelected(null);
       return;
     }
 
@@ -657,6 +681,8 @@ export default function Board() {
   const cursor =
     tool === 'select'
       ? 'default'
+      : tool === 'move'
+        ? 'move'
       : tool === 'hand'
         ? 'grab'
         : tool === 'text'
