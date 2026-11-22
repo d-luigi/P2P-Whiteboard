@@ -13,7 +13,10 @@
 
 ## Demo video
 
-<video src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4" controls width="100%" poster="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.jpg"></video>
+<video controls preload="metadata" width="100%" poster="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.jpg">
+  <source src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4" type="video/mp4">
+  <a href="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4">Download or play brag.mp4</a>
+</video>
 
 The 21-second demo plays inline above. The board content and room code are fictional examples. [Music and sound credits](brag-output-2026-11-22-151300/music-credit.txt).
 
