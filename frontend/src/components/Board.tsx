@@ -69,8 +69,7 @@ function ShapeNode({
       if (shape.media || shape.note !== undefined) {
         const edit = () => {
           if (!interactive || shape.note === undefined) return;
-          const note = window.prompt('Edit sticky note', shape.note);
-          if (note !== null) updateShape(shape.id, { note: note.slice(0, 10000) });
+          useUI.getState().requestEdit(shape.id);
         };
         return (
           <Group {...common} x={shape.x} y={shape.y} width={shape.width} height={shape.height}
@@ -220,6 +219,7 @@ function ShapeNode({
 /* ---------- the board ---------- */
 
 export default function Board() {
+  const [noteEditor, setNoteEditor] = useState<{ id: string; value: string } | null>(null);
   const shapesMap = useDoc((s) => s.shapes);
   const addShape = useDoc((s) => s.addShape);
   const deleteShapes = useDoc((s) => s.deleteShapes);
@@ -458,7 +458,8 @@ export default function Board() {
     if (!editRequest) return;
     const s = useDoc.getState().shapes[editRequest];
     requestEdit(null);
-    if (s) editText(s);
+    if (s?.type === 'rect' && s.note !== undefined) setNoteEditor({ id: s.id, value: s.note });
+    else if (s) editText(s);
   }, [editRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Finish a Selection-tool drag: select whatever the rectangle / loop caught. */
@@ -845,6 +846,26 @@ export default function Board() {
           />
         </Layer>
       </Stage>
+      {selectish && selected?.type === 'rect' && selected.note !== undefined && (
+        <button className="btn wide" style={{ position: 'absolute', bottom: 80, left: 16, zIndex: 12 }}
+          onClick={() => setNoteEditor({ id: selected.id, value: selected.note! })}>✏️ Edit sticky note</button>
+      )}
+      {noteEditor && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#0006', display: 'grid', placeItems: 'center' }}
+          onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') setNoteEditor(null); }}>
+          <form role="dialog" aria-modal="true" aria-label="Edit sticky note"
+            style={{ background: 'white', padding: 20, borderRadius: 12, width: 'min(420px, 90vw)' }}
+            onSubmit={(e) => { e.preventDefault(); if (useDoc.getState().shapes[noteEditor.id]) updateShape(noteEditor.id, { note: noteEditor.value }); setNoteEditor(null); }}>
+            <label>📝 Sticky note
+              <textarea autoFocus aria-label="Sticky note text" maxLength={10000} rows={7} value={noteEditor.value}
+                style={{ display: 'block', width: '100%', fontSize: 16, margin: '12px 0' }}
+                onChange={(e) => setNoteEditor({ ...noteEditor, value: e.target.value })} />
+            </label>
+            <button className="btn wide" type="button" onClick={() => setNoteEditor(null)}>Cancel</button>
+            <button className="btn wide" type="submit">Save</button>
+          </form>
+        </div>
+      )}
       {editor?.id && (
         <button
           className="text-editor-del"

@@ -66,17 +66,27 @@ export default function InsertItems({ onDone }: { onDone?: () => void }) {
       shapes.push({ ...rectangle(x + 20, p.y - 165, 220, 180, colors[i]), z: Date.now() + 2, note: 'Double-tap to edit' });
     });
     insert(shapes);
+    // Leave template items individually selectable; a group overlay intercepts note taps.
+    useUI.getState().setSelection([]);
     useUI.getState().setView({ x: window.innerWidth / 2 - p.x * Math.min(1, (window.innerWidth - 40) / 840), y: window.innerHeight / 2 - p.y * Math.min(1, (window.innerWidth - 40) / 840), scale: Math.min(1, (window.innerWidth - 40) / 840) });
   };
   if (readOnly) return null;
   return <div className="group edit-only" role="group" aria-label="Insert items">
     <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void upload(file); }} />
-    <button className="btn wide" disabled={busy} onClick={() => { if (input.current) { input.current.accept = 'image/png,image/jpeg,image/webp'; input.current.click(); } }}>Image</button>
-    <button className="btn wide" disabled={busy} onClick={() => { if (input.current) { input.current.accept = 'image/gif'; input.current.click(); } }}>GIF</button>
-    <button className="btn wide" onClick={sticky}>Sticky note</button>
-    <select className="btn wide" aria-label="Board templates" value="" onChange={(e) => { if (e.target.value) template(e.target.value as keyof typeof templates); }}>
-      <option value="">Templates</option>
-      <option value="kanban">Kanban</option><option value="brainstorm">Brainstorming</option><option value="retrospective">Retrospective</option>
+    <select className="btn wide" aria-label="Insert items" disabled={busy} value="" onChange={(e) => {
+      const choice = e.target.value;
+      if (choice === 'image' || choice === 'gif') {
+        if (input.current) { input.current.accept = choice === 'gif' ? 'image/gif' : 'image/png,image/jpeg,image/webp'; input.current.click(); }
+      } else if (choice === 'sticky') sticky();
+      else if (choice in templates) template(choice as keyof typeof templates);
+    }}>
+      <option value="">{busy ? '⏳ Loading…' : '➕ Insert'}</option>
+      <option value="image">🖼️ Image</option>
+      <option value="gif">🎞️ GIF</option>
+      <option value="sticky">📝 Sticky note</option>
+      <optgroup label="📋 Board templates">
+        <option value="kanban">📊 Kanban</option><option value="brainstorm">💡 Brainstorming</option><option value="retrospective">🔄 Retrospective</option>
+      </optgroup>
     </select>
   </div>;
 }
