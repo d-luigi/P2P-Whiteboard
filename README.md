@@ -4,11 +4,12 @@
   <img src="docs/brand/p2p-lockup.svg" alt="P2P Whiteboard" width="640" />
 
   <h2>Draw together. Think together.</h2>
-  <p>A lightweight peer-to-peer whiteboard for planning, sketching, and sharing ideas in real time.</p>
-
-  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/license-MIT-2563EB.svg" alt="MIT License"></a>
-  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/transport-WebRTC-111827.svg" alt="WebRTC"></a>
-  <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/mobile-PWA-2563EB.svg" alt="Progressive Web App"></a>
+  <p><strong>A lightweight peer-to-peer whiteboard for planning, sketching, and sharing ideas in real time.</strong></p>
+  <p>
+    <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/license-MIT-2563EB.svg" alt="MIT License"></a>
+    <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/transport-WebRTC-111827.svg" alt="WebRTC"></a>
+    <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/mobile-PWA-2563EB.svg" alt="Progressive Web App"></a>
+  </p>
 </div>
 
 ## Demo video
