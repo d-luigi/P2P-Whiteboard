@@ -110,6 +110,26 @@ export default function Toolbar() {
 
   const isMobile = useIsMobile();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(true);
+  useEffect(() => {
+    const reveal = () => {
+      setToolbarVisible(true);
+      window.clearTimeout((reveal as typeof reveal & { timer?: number }).timer);
+      (reveal as typeof reveal & { timer?: number }).timer = window.setTimeout(() => {
+        if (!menuOpen) setToolbarVisible(false);
+      }, 3500);
+    };
+    reveal();
+    window.addEventListener('pointermove', reveal);
+    window.addEventListener('pointerdown', reveal);
+    window.addEventListener('keydown', reveal);
+    return () => {
+      window.removeEventListener('pointermove', reveal);
+      window.removeEventListener('pointerdown', reveal);
+      window.removeEventListener('keydown', reveal);
+      window.clearTimeout((reveal as typeof reveal & { timer?: number }).timer);
+    };
+  }, [menuOpen]);
   useEffect(() => {
     if (!isMobile) setMenuOpen(false);
   }, [isMobile]);
@@ -331,9 +351,9 @@ export default function Toolbar() {
 
               <section className="dd-section edit-only">
                 <h3 className="dd-title">{isEraser ? 'Eraser' : 'Size and colour'}</h3>
-                {modeGroups}
-                {sizeGroup}
-                {!isEraser && colorGroup}
+                {tool === 'marquee' && modeGroups}
+                {(tool === 'pen' || tool === 'eraser') && sizeGroup}
+                {(tool === 'pen' || tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow') && colorGroup}
               </section>
 
               <section className="dd-section edit-only">
@@ -382,7 +402,7 @@ export default function Toolbar() {
   /* ---------- desktop: the full toolbar, unchanged ---------- */
 
   return (
-    <div className={`toolbar ${readOnly ? 'readonly' : ''}`} role="toolbar" aria-label="Whiteboard tools">
+    <div className={`toolbar ${readOnly ? 'readonly' : ''} ${toolbarVisible ? '' : 'toolbar-hidden'}`} role="toolbar" aria-label="Whiteboard tools">
       <div className="group">
         {visibleTools.map((t) => (
           <button
@@ -400,9 +420,9 @@ export default function Toolbar() {
 
       {undoRedo}
       <InsertItems />
-      {modeGroups}
-      {sizeGroup}
-      {colorGroup}
+      {tool === 'marquee' && modeGroups}
+      {(tool === 'pen' || tool === 'eraser') && sizeGroup}
+      {(tool === 'pen' || tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow') && colorGroup}
 
       <div className="group edit-only">{deleteButton}</div>
 
