@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
   <title id="title">P2P Whiteboard logo</title>
   <desc id="desc">Connected tiles mark beside the P2P Whiteboard wordmark.</desc>
+  <rect width="720" height="180" rx="16" fill="#FFFFFF"/>
   <g transform="translate(8 8) scale(.64)">
     <path fill="#111827" d="M42 55h104c11 0 20 9 20 20v55H88c-25 0-46 20-46 45V75c0-11 9-20 20-20Z"/>
     <path fill="#2563EB" d="M110 126h104c11 0 20 9 20 20v55c0 11-9 20-20 20H110c-11 0-20-9-20-20v-55c0-11 9-20 20-20Z"/>
