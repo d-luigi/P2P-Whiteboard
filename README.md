@@ -11,6 +11,12 @@
   <a href="https://github.com/d-luigi/P2P-Whiteboard"><img src="https://img.shields.io/badge/mobile-PWA-2563EB.svg" alt="Progressive Web App"></a>
 </div>
 
+## Demo video
+
+[![Watch the P2P Whiteboard demo](brag-output-2026-11-22-151300/brag.jpg)](brag-output-2026-11-22-151300/brag.mp4)
+
+[Watch or download the 21-second demo](brag-output-2026-11-22-151300/brag.mp4). The board content and room code are fictional examples. [Music and sound credits](brag-output-2026-11-22-151300/music-credit.txt).
+
 ## What it does
 
 P2P Whiteboard opens an infinite canvas directly in the browser. Create a board, share its six-character room code, and collaborate live without routing drawings through a central database.
