@@ -1,7 +1,7 @@
 # P2P Whiteboard
 
 <div align="center">
-  <img src="brand/p2p-lockup.svg" alt="P2P Whiteboard" width="640" />
+  <img src="docs/brand/p2p-lockup.svg" alt="P2P Whiteboard" width="640" />
 
   <h2>Draw together. Think together.</h2>
   <p>A lightweight peer-to-peer whiteboard for planning, sketching, and sharing ideas in real time.</p>
@@ -13,12 +13,12 @@
 
 ## Demo video
 
-<video controls preload="metadata" width="100%" poster="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.jpg">
-  <source src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4" type="video/mp4">
-  <a href="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/brag-output-2026-11-22-151300/brag.mp4">Download or play brag.mp4</a>
+<video controls preload="metadata" width="100%" poster="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.jpg">
+  <source src="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.mp4" type="video/mp4">
+  <a href="https://github.com/d-luigi/P2P-Whiteboard/raw/refs/heads/parikshit-work/docs/demo/brag.mp4">Download or play brag.mp4</a>
 </video>
 
-The 21-second demo plays inline above. The board content and room code are fictional examples. [Music and sound credits](brag-output-2026-11-22-151300/music-credit.txt).
+The 21-second demo plays inline above. The board content and room code are fictional examples. [Music and sound credits](docs/demo/music-credit.txt).
 
 ## What it does
 
@@ -63,7 +63,7 @@ frontend/       React, Vite, Konva, and Yjs whiteboard app
 signaling/      WebSocket signaling and short-code directory
 supabase/       Optional account schema
 docs/           Deployment, offline, account, and room-code guides
-brand/          Logo assets and usage guide
+docs/brand/     Logo assets and usage guide
 ```
 
 ## Tech stack
@@ -100,4 +100,4 @@ Read [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/OFFLINE.md`](docs/OFFLIN
 
 ## Brand
 
-The horizontal wordmark and connected-tiles mark are documented in [`brand/README.md`](brand/README.md).
+The horizontal wordmark and connected-tiles mark are documented in [`docs/brand/README.md`](docs/brand/README.md).
