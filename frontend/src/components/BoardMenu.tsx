@@ -4,6 +4,7 @@ import { downloadBackup, importBackupFile } from '../backup';
 import { readOnly } from '../board';
 import { useUI } from '../uiStore';
 import { toast } from '../toast';
+import { claimOwnership, useOwner } from '../owner';
 
 const kb = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
@@ -18,6 +19,9 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const setHelp = useUI((s) => s.setHelp);
+  const setDeleteDialog = useUI((s) => s.setDeleteDialog);
+  const isOwner = useOwner((s) => s.isOwner);
+  const ownerHash = useOwner((s) => s.ownerHash);
 
   const loadStats = () => {
     try {
@@ -48,6 +52,10 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
   };
 
   const shown = inline || open;
+  const close = () => {
+    setOpen(false);
+    onDone?.();
+  };
 
   return (
     <div className={inline ? 'boardmenu inline' : 'boardmenu'}>
@@ -74,6 +82,9 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
               {stats.shapes} {stats.shapes === 1 ? 'shape' : 'shapes'} · {kb(stats.bytes)} saved
             </div>
           )}
+          <div className="menu-stat" role="presentation">
+            {isOwner ? '👑 You are an owner of this board' : ownerHash ? 'This board has an owner' : 'This board has no owner yet'}
+          </div>
           <button
             role="menuitem"
             className="menu-item"
@@ -112,6 +123,46 @@ export default function BoardMenu({ inline = false, onDone }: { inline?: boolean
               Keyboard shortcuts (?)
             </button>
           )}
+          {!readOnly && !ownerHash && (
+            <button
+              role="menuitem"
+              className="menu-item"
+              title="Boards made before owners existed have none. The first person to claim it becomes its owner."
+              onClick={() => {
+                toast(
+                  claimOwnership()
+                    ? 'You now own this board. Share an owner link from Share to add co-owners.'
+                    : 'Not yet: the board is still syncing, or it already has an owner. Try again in a moment.',
+                );
+                close();
+              }}
+            >
+              Claim ownership
+            </button>
+          )}
+          {!readOnly && isOwner && (
+            <button
+              role="menuitem"
+              className="menu-item danger"
+              onClick={() => {
+                close();
+                setDeleteDialog('everyone');
+              }}
+            >
+              Delete board for everyone…
+            </button>
+          )}
+          <button
+            role="menuitem"
+            className="menu-item"
+            title="Erases only the copy saved in this browser"
+            onClick={() => {
+              close();
+              setDeleteDialog('local');
+            }}
+          >
+            Remove from this device…
+          </button>
           <input
             ref={fileRef}
             type="file"

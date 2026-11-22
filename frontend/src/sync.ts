@@ -2,7 +2,7 @@ import { WebrtcProvider } from 'y-webrtc';
 import { Awareness } from 'y-protocols/awareness';
 import { create } from 'zustand';
 import { ydoc } from './docStore';
-import { boardId, getPassword, passwordProtected, passwordsSupported } from './board';
+import { boardId, getPassword, isMarkedDeleted, passwordProtected, passwordsSupported } from './board';
 import { sha256Hex } from './sha256';
 
 /**
@@ -52,7 +52,9 @@ let needsPassword = false;
 let provider: WebrtcProvider | null = null;
 
 const password = getPassword();
-if (passwordProtected && !password) {
+if (isMarkedDeleted()) {
+  // Deleted by its owner: never connect to anyone for this board.
+} else if (passwordProtected && !password) {
   needsPassword = true; // PasswordGate asks; we connect to no one until then
 } else if (password && !passwordsSupported) {
   initError = 'Passwords need https:// or localhost, so this board is not connected. Open it from a secure address.';

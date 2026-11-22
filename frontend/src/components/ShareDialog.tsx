@@ -1,11 +1,20 @@
 import { useState } from 'react';
-import { passwordProtected, passwordsSupported, readOnly, setPassword, shareLink } from '../board';
+import { getOwnerKey, ownerLink, passwordProtected, passwordsSupported, readOnly, setPassword, shareLink } from '../board';
+import { useOwner } from '../owner';
 import { copyText } from '../backup';
 import { toast } from '../toast';
 
 /** Share links and the optional password. Opens from the Share button (Presence.tsx). */
 export default function ShareDialog({ onClose }: { onClose: () => void }) {
   const [pw, setPw] = useState('');
+  const isOwner = useOwner((s) => s.isOwner);
+
+  const copyOwner = async () => {
+    const key = getOwnerKey();
+    if (key && (await copyText(ownerLink(key), 'the owner link'))) {
+      toast('Owner link copied. Whoever opens it becomes an owner.');
+    }
+  };
 
   const copy = async (kind: 'edit' | 'view') => {
     if (await copyText(shareLink(kind), kind === 'edit' ? 'the edit link' : 'the view-only link')) {
@@ -37,6 +46,18 @@ export default function ShareDialog({ onClose }: { onClose: () => void }) {
         Opens without editing tools. This is a courtesy, not a lock: there is no server to enforce it,
         so a determined person could still edit their own copy.
       </p>
+
+      {!readOnly && isOwner && (
+        <>
+          <button className="chip-btn block" onClick={copyOwner}>
+            Copy owner link
+          </button>
+          <p className="hint">
+            Gives someone the same powers as you, including deleting the board for everyone. Only send
+            it to people you trust as co-owners.
+          </p>
+        </>
+      )}
 
       {!readOnly && (
         <div className="pw">

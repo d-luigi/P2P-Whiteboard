@@ -19,12 +19,20 @@
  *
  * With no ID in the URL we reopen the board used last (with the same flags); only a
  * first-ever visit creates a new one.
+ *
+ * OWNERS. The browser that creates a board holds its owner key (owner.ts). An owner link
+ *   #<id>.owner:<key>
+ * hands that key to someone else. The key is moved into this browser's storage and removed
+ * from the address bar straight away, and it is never part of the edit or view links.
  */
+import { parse, stringify, type Flag, type Parsed } from './boardUrl';
+
 const LAST_KEY = 'p2pwb:lastBoard';
 const PW_PREFIX = 'p2pwb:pw:';
-const VALID_ID = /^[A-Za-z0-9_-]{4,64}$/;
-const FLAGS = ['pw', 'view'] as const; // canonical order in the URL
-type Flag = (typeof FLAGS)[number];
+const OWNER_PREFIX = 'p2pwb:owner:'; // this browser's owner key for a board
+const PIN_PREFIX = 'p2pwb:ownerpin:'; // the owner hash this browser trusts for a board
+const CREATED_PREFIX = 'p2pwb:created:'; // this browser just made this board
+const DELETED_PREFIX = 'p2pwb:deleted:'; // the owner deleted this board
 
 export function randomBoardId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16)); // 128 bits
@@ -33,18 +41,29 @@ export function randomBoardId(): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-interface Parsed {
-  id: string;
-  flags: Set<Flag>;
-}
-
-function parse(fragment: string): Parsed | null {
-  const [id, ...rest] = fragment.replace(/^#\/?/, '').split('.');
-  if (!VALID_ID.test(id)) return null;
-  return { id, flags: new Set(rest.filter((f): f is Flag => (FLAGS as readonly string[]).includes(f))) };
-}
-
-const stringify = (p: Parsed) => p.id + FLAGS.filter((f) => p.flags.has(f)).map((f) => `.${f}`).join('');
+const store = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key: string, value: string) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* storage blocked: ignore */
+    }
+  },
+  remove(key: string) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+  },
+};
 
 function resolve(): Parsed {
   let parsed = parse(location.hash);
@@ -55,7 +74,11 @@ function resolve(): Parsed {
       /* storage blocked: fall through to a fresh board */
     }
   }
-  if (!parsed) parsed = { id: randomBoardId(), flags: new Set() };
+  if (!parsed) {
+    parsed = { id: randomBoardId(), flags: new Set() };
+    store.set(CREATED_PREFIX + parsed.id, '1'); // a brand-new board: this browser will own it
+  }
+  if (parsed.ownerKey) store.set(OWNER_PREFIX + parsed.id, parsed.ownerKey); // opened an owner link
   try {
     localStorage.setItem(LAST_KEY, stringify(parsed));
   } catch {
@@ -78,7 +101,9 @@ window.addEventListener('hashchange', () => location.reload());
 
 /** Open a fresh, empty board. The old one stays saved and reachable by its link. */
 export function newBoard() {
-  location.hash = randomBoardId();
+  const id = randomBoardId();
+  store.set(CREATED_PREFIX + id, '1'); // the creator becomes the owner (owner.ts)
+  location.hash = id;
 }
 
 /** A shareable link to this board. */
@@ -119,4 +144,44 @@ export function setPassword(password: string | null) {
   const next = `#${stringify({ id: boardId, flags })}`;
   if (location.hash === next) location.reload();
   else location.hash = next; // the hashchange handler reloads
+}
+
+/* ---------- ownership (the rules live in ownership.ts / owner.ts) ---------- */
+
+/** This browser made the board just now (so it should become its owner). */
+export const wasCreatedHere = () => store.get(CREATED_PREFIX + boardId) === '1';
+export const clearCreatedFlag = () => store.remove(CREATED_PREFIX + boardId);
+
+/** The owner key this browser holds for the board, if any. */
+export const getOwnerKey = () => store.get(OWNER_PREFIX + boardId);
+export const setOwnerKey = (key: string) => store.set(OWNER_PREFIX + boardId, key);
+
+/** The owner hash this browser first saw for the board (trust on first use). */
+export const getPinnedHash = () => store.get(PIN_PREFIX + boardId);
+export const setPinnedHash = (hash: string) => store.set(PIN_PREFIX + boardId, hash);
+
+/** A link that makes whoever opens it an owner. Treat it like a password. */
+export function ownerLink(key: string): string {
+  const flags = new Set<Flag>();
+  if (passwordProtected) flags.add('pw');
+  return `${location.origin}${location.pathname}${location.search}#${stringify({ id: boardId, flags, ownerKey: key }, true)}`;
+}
+
+/** The owner deleted this board: it never opens again on this device. */
+export const isMarkedDeleted = () => store.get(DELETED_PREFIX + boardId) === '1';
+export const markDeleted = () => store.set(DELETED_PREFIX + boardId, '1');
+
+/**
+ * Forget what this browser stores about the board outside its database: the saved password,
+ * the "reopen last board" pointer, and (when `everything`) the owner key and trusted hash too.
+ * Removing a copy keeps the owner key, so an owner can still rejoin later.
+ */
+export function forgetBoardKeys(everything: boolean) {
+  store.remove(PW_PREFIX + boardId);
+  store.remove(CREATED_PREFIX + boardId);
+  if (parse(store.get(LAST_KEY) ?? '')?.id === boardId) store.remove(LAST_KEY);
+  if (everything) {
+    store.remove(OWNER_PREFIX + boardId);
+    store.remove(PIN_PREFIX + boardId);
+  }
 }

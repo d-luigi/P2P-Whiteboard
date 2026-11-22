@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { create } from 'zustand';
-import { boardId, readOnly } from './board';
+import { boardId, isMarkedDeleted, readOnly } from './board';
 import { sanitizeShape } from './validate';
 import type { Shape } from './types';
 
@@ -34,6 +34,8 @@ type Shapes = Record<string, Shape>;
 // the deleted content, and with it the saved undo history.
 export const ydoc = new Y.Doc({ gc: false });
 export const yShapes = ydoc.getMap<Y.Map<unknown>>('shapes');
+/** Board-level facts that are not drawing: who owns it (a hash) and whether it was deleted. See owner.ts. */
+export const yMeta = ydoc.getMap<unknown>('meta');
 
 /** Transaction origin for edits made by this user (the only origin the undo manager tracks). */
 const LOCAL = 'local';
@@ -149,7 +151,7 @@ const dbName = (gen: string) => `p2pwb:board:${boardId}${gen ? `:${gen}` : ''}`;
 
 let persistence: IndexeddbPersistence | null = null;
 try {
-  if (typeof indexedDB !== 'undefined') {
+  if (!isMarkedDeleted() && typeof indexedDB !== 'undefined') {
     persistence = new IndexeddbPersistence(dbName(generation), ydoc);
   }
 } catch {
@@ -439,7 +441,16 @@ export function importBackup(bytes: Uint8Array): number {
   }
   if (count === 0) throw new Error('That backup has no shapes in it.');
   undoManager.stopCapturing();
+  // A backup carries the OTHER board's ownership marks. Never let them replace this board's.
+  const keep = { ownerHash: yMeta.get('ownerHash'), deleted: yMeta.get('deleted') };
   ydoc.transact(() => Y.applyUpdate(ydoc, bytes), LOCAL);
+  ydoc.transact(() => {
+    for (const [k, v] of Object.entries(keep)) {
+      if (yMeta.get(k) === v) continue;
+      if (v === undefined) yMeta.delete(k);
+      else yMeta.set(k, v);
+    }
+  }, LOAD);
   undoManager.stopCapturing();
   return count;
 }
@@ -536,4 +547,28 @@ if (persistence) {
   window.setTimeout(() => {
     if (useDoc.getState().status === 'loading') useDoc.setState({ status: 'memory' });
   }, SYNC_TIMEOUT_MS);
+}
+
+/* ---------- erasing the local copy ---------- */
+
+/**
+ * Erase everything this browser saved for this board: its IndexedDB database, the saved undo
+ * history and the compaction markers. Used when a board is deleted or removed from this device.
+ */
+export async function wipeLocalBoard() {
+  undoReady = false; // stop the undo history being written back when the page is hidden
+  try {
+    if (persistence) await persistence.clearData();
+    else if (typeof indexedDB !== 'undefined') indexedDB.deleteDatabase(dbName(generation));
+  } catch (err) {
+    console.error('Could not erase the saved board', err);
+  }
+  persistence = null;
+  try {
+    localStorage.removeItem(UNDO_KEY);
+    localStorage.removeItem(GEN_KEY);
+    sessionStorage.removeItem(COMPACT_TRIED_KEY);
+  } catch {
+    /* ignore */
+  }
 }

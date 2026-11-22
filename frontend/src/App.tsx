@@ -6,6 +6,9 @@ import Toasts from './components/Toasts';
 import PasswordGate from './components/PasswordGate';
 import Shortcuts from './components/Shortcuts';
 import EmptyState from './components/EmptyState';
+import DeleteDialog from './components/DeleteDialog';
+import DeletedScreen from './components/DeletedScreen';
+import { useOwner } from './owner';
 import A11y from './components/A11y';
 import { readOnly } from './board';
 import { RemoteCursors, LaserCanvas } from './components/Cursors';
@@ -36,6 +39,7 @@ const ARROWS: Record<string, [number, number]> = {
 
 export default function App() {
   const status = useDoc((s) => s.status);
+  const deleted = useOwner((s) => s.deleted);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -112,6 +116,9 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // The owner deleted this board: nothing else is shown (and nothing is saved or synced).
+  if (deleted) return <DeletedScreen />;
+
   // Wait for the saved board to load from IndexedDB, so the first thing drawn is the
   // real board (not an empty one that is then replaced).
   if (status === 'loading') {
@@ -133,6 +140,7 @@ export default function App() {
       <EmptyState />
       <PasswordGate />
       <Shortcuts />
+      <DeleteDialog />
       <Toasts />
       <A11y />
       {readOnly && (

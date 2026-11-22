@@ -80,6 +80,9 @@ interface UIState {
   followId: number | null;
   helpOpen: boolean; // keyboard shortcuts dialog
   setHelp: (open: boolean) => void;
+  /** Which delete confirmation is open: for everyone (owners) or just this device. */
+  deleteDialog: 'everyone' | 'local' | null;
+  setDeleteDialog: (mode: 'everyone' | 'local' | null) => void;
   setFollow: (id: number | null) => void;
   setTool: (tool: Tool) => void;
   setSelected: (id: string | null) => void;
@@ -113,6 +116,8 @@ export const useUI = create<UIState>((set, get) => ({
   tool: readOnly ? 'hand' : 'select',
   helpOpen: false,
   setHelp: (helpOpen) => set({ helpOpen }),
+  deleteDialog: null,
+  setDeleteDialog: (deleteDialog) => set({ deleteDialog }),
   selectedIds: [],
   style: { stroke: '#1f2430', fill: 'transparent', strokeWidth: 4 },
   eraserSize: 24,

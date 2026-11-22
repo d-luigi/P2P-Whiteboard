@@ -1,0 +1,54 @@
+/* Delete / ownership UI */
+
+.chip-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.chip-btn.danger {
+  color: #fff;
+  background: #c92a2a;
+}
+
+.chip-btn.danger:hover:not(:disabled) {
+  background: #a61e1e;
+}
+
+.gate-actions .chip-btn {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+.menu-item.danger {
+  color: #c92a2a;
+}
+
+.confirm-field {
+  display: block;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.confirm-field input {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 6px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 16px; /* stops iOS zooming the page on focus */
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.confirm-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (pointer: coarse) {
+  .gate-actions .chip-btn {
+    height: 44px;
+  }
+}
