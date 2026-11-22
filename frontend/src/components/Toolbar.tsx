@@ -1,7 +1,8 @@
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { useDoc } from '../docStore';
 import { useUI } from '../uiStore';
-import { boardId, newBoard, readOnly } from '../board';
+import { newBoard, readOnly } from '../board';
+import BoardCode from './BoardCode';
 import BoardMenu from './BoardMenu';
 import InsertItems from './InsertItems';
 import JoinBoard from './JoinBoard';
@@ -350,8 +351,9 @@ export default function Toolbar() {
 
               <section className="dd-section">
                 <h3 className="dd-title">
-                  Board <span className="board-id">{boardId.slice(0, 6)}</span>
+                  Board
                 </h3>
+                <BoardCode />
                 <button
                   className="menu-item"
                   onClick={() => {
@@ -405,9 +407,7 @@ export default function Toolbar() {
       <div className="group edit-only">{deleteButton}</div>
 
       <div className="group">
-        <span className="board-id" title={`Board ${boardId}. Saved in this browser; bookmark this link to return.`}>
-          {boardId.slice(0, 6)}
-        </span>
+        <BoardCode />
         <button
           className="btn"
           title="New board (the current one stays saved at its link)"

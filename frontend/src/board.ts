@@ -9,7 +9,8 @@
  *
  * The ID is the secret. New IDs are 128 random bits (22 characters), so they cannot be
  * guessed; boards made by earlier versions have shorter IDs and are less strong. The hash is
- * never sent to any server, and the signalling server only ever sees a SHA-256 of it (sync.ts).
+ * not sent by sync, which uses a SHA-256 hash (sync.ts). The short-code directory
+ * separately stores the board ID to resolve join codes (docs/ROOM_CODES.md).
  *
  * VIEW-ONLY IS ADVISORY. There is no server to check who may write: every peer holds the whole
  * document, so a determined person can edit their own copy and send it. View-only stops
@@ -95,6 +96,8 @@ export const boardId = current.id;
 export const readOnly = current.flags.has('view');
 /** The board asks for a password before connecting to anyone. */
 export const passwordProtected = current.flags.has('pw');
+/** The complete code used by Join board, including password and viewing flags. */
+export const boardCode = stringify({ id: boardId, flags: current.flags });
 
 // The document is created once per page load for one board, so switching boards = reload.
 window.addEventListener('hashchange', () => location.reload());

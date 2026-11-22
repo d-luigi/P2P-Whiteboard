@@ -16,7 +16,8 @@ import { sha256Hex } from './sha256';
  *  - Between different networks you need (1) a signalling server that both can reach and
  *    (2) sometimes a TURN relay. See .env.example.
  *  - The room name is a SHA-256 of the secret board ID, so the signalling server (which sees
- *    room names) never learns the ID and can't join your board.
+ *    room names) does not receive the ID through sync. Short-code registration
+ *    separately shares the ID with the directory (see docs/ROOM_CODES.md).
  *  - Optional password: y-webrtc encrypts the signalling messages with it, so people without
  *    it can't even connect. (It does not encrypt what is saved in this browser.)
  *  - `awareness` carries the ephemeral per-user state (cursor, name, colour, camera,

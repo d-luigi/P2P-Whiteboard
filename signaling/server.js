@@ -6,7 +6,8 @@
  * subscribes to a topic (the board's room name) and publishes small messages (connection offers
  * and answers) that are relayed to everyone else subscribed to the same topic. After that the
  * browsers talk directly to each other. This server never sees drawing data, and the room
- * name is a hash of the board's secret ID (see frontend/src/sync.ts).
+ * name is a hash of the board's secret ID (see frontend/src/sync.ts). Short-code
+ * registration separately stores board IDs and flags in memory (docs/ROOM_CODES.md).
  *
  * Speaks the protocol of the `y-webrtc` client:
  *   {type:'subscribe',   topics:[...]}
@@ -22,6 +23,10 @@
  */
 const http = require('node:http');
 const { WebSocketServer } = require('ws');
+const { createRoomCodes } = require('./roomCodes');
+const roomCodes = createRoomCodes();
+const codeRequests = new Map();
+setInterval(() => codeRequests.clear(), 60_000).unref();
 
 const PORT = Number(process.env.PORT) || 4444;
 const MAX_PAYLOAD = 256 * 1024; // bytes per message; offers/answers are a few KB
@@ -70,7 +75,7 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
-wss.on('connection', (conn) => {
+wss.on('connection', (conn, req) => {
   const subscribed = new Set();
   let alive = true;
   let windowStart = Date.now();
@@ -117,6 +122,24 @@ wss.on('connection', (conn) => {
       return; // not JSON: ignore it, don't crash
     }
     if (!message || typeof message !== 'object') return;
+
+    if (message.type === 'room-register' || message.type === 'room-resolve') {
+      const address = req.socket.remoteAddress;
+      const count = (codeRequests.get(address) || 0) + 1;
+      codeRequests.set(address, count);
+      if (count > 60) {
+        send(conn, { type: 'room-result', id: message.id, error: 'Too many code requests. Try again in a minute.' });
+        return;
+      }
+      if (message.type === 'room-register') {
+        const code = roomCodes.register(message.fragment);
+        send(conn, { type: 'room-result', id: message.id, code, error: code ? undefined : 'Could not create a room code.' });
+      } else {
+        const fragment = roomCodes.resolve(message.code);
+        send(conn, { type: 'room-result', id: message.id, fragment, error: fragment ? undefined : 'Room code not found or expired. Ask the host for their current code.' });
+      }
+      return;
+    }
 
     switch (message.type) {
       case 'subscribe':

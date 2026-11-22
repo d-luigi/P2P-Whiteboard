@@ -38,8 +38,10 @@ sync with [Yjs](https://yjs.dev), a CRDT, so edits merge cleanly, including edit
 ```
 
 The two halves are independent packages with their own `package.json`; nothing is shared. The
-**signalling server only introduces browsers to each other**. It never sees drawings, and the room
-name it sees is a hash of the board's secret ID.
+**signalling server introduces browsers to each other**. It never sees drawings. Sync topics
+use a hash of the board ID. The short-code directory also stores board IDs and access flags
+temporarily so people can join using a six-character code. See [short room codes](docs/ROOM_CODES.md)
+for deployment and expiry details.
 
 ## Run it locally
 
@@ -90,7 +92,9 @@ Signalling server: `PORT` (default 4444) and `ALLOWED_ORIGINS` (which websites m
 - Data from other peers is validated before it is drawn.
 - **Accounts trade some of this away, only for people who sign in.** The account stores the IDs of your
   boards and the owner keys of boards you own, so whoever runs the Supabase project could open them.
-  Guests send nothing to any server. Details in [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
+  Guests do not upload account data. Short-code registration shares board IDs and access flags
+  with the signaling directory. Details in [docs/ACCOUNTS.md](docs/ACCOUNTS.md) and
+  [docs/ROOM_CODES.md](docs/ROOM_CODES.md).
 
 ## Deploying
 
